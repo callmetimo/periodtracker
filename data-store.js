@@ -1,7 +1,7 @@
 // Period Tracker — data layer using Google Sheets as a simple Key-Value store.
 
 const DataStore = (() => {
-  const LS_SS_ID = 'notaPublic_spreadsheetId';
+  const LS_SS_ID = 'periodTracker_spreadsheetId';
 
   let spreadsheetId = localStorage.getItem(LS_SS_ID) || null;
 

@@ -233,7 +233,7 @@ const Auth = (() => {
   }
 
   async function start() {
-    const cachedSpreadsheetId = localStorage.getItem('notaPublic_spreadsheetId');
+    const cachedSpreadsheetId = localStorage.getItem('periodTracker_spreadsheetId');
 
     if (cachedSpreadsheetId) {
       // ── RETURNING USER PATH ──────────────────────────────────────────────
@@ -276,10 +276,10 @@ const Auth = (() => {
     } catch (err) { console.warn('[auth] revoke failed', err); }
     accessToken = null;
     tokenExpiresAt = 0;
-    localStorage.removeItem('notaPublic_spreadsheetId');
-    localStorage.removeItem('notaPublic_opexSheetId');
-    localStorage.removeItem('notaPublic_investSheetId');
-    localStorage.removeItem('notaPublic_splitMigratedV1'); // migration flag — reset so it re-runs if the user signs into a different account
+    localStorage.removeItem('periodTracker_spreadsheetId');
+    localStorage.removeItem('periodTracker_opexSheetId');
+    localStorage.removeItem('periodTracker_investSheetId');
+    localStorage.removeItem('periodTracker_splitMigratedV1'); // migration flag — reset so it re-runs if the user signs into a different account
     location.reload();
   }
 
