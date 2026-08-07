@@ -106,6 +106,28 @@ function getWeekStartSetting() {
     return parseInt(localStorage.getItem('periodTrackerWeekStart') || '0', 10);
 }
 
+function showToast(message) {
+    const existing = document.getElementById('app-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed; bottom: 88px; right: 16px; z-index: 9999;
+        background: #1a1a2e; color: #fff; padding: 10px 18px;
+        border-radius: 20px; font-size: 13px; font-weight: 600;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        opacity: 0; transition: opacity 0.25s ease;
+        pointer-events: none;
+    `;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; });
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 function updateWeekdaysHeaders() {
     const weekStart = getWeekStartSetting();
     const headers = weekStart === 1 ? ['M','T','W','T','F','S','S'] : ['S','M','T','W','T','F','S'];
@@ -122,11 +144,12 @@ function initNavigation() {
 
     navItems.forEach(item => {
         item.addEventListener('click', () => {
-            // Remove active class from all items and views
             navItems.forEach(nav => nav.classList.remove('active'));
-            views.forEach(view => view.classList.remove('active'));
+            // Skip view-logging — it has its own open/close logic via the FAB
+            views.forEach(view => {
+                if (view.id !== 'view-logging') view.classList.remove('active');
+            });
 
-            // Add active class to clicked item and target view
             item.classList.add('active');
             const targetId = item.getAttribute('data-target');
             if (targetId) {
@@ -146,17 +169,20 @@ function initNavigation() {
     });
 
     document.getElementById('log-save').addEventListener('click', async () => {
-        // Save to local state
         localStorage.setItem('periodTrackerLoggedDates', JSON.stringify(Array.from(loggedDates)));
-        
         document.getElementById('view-logging').classList.remove('active');
-        
-        // Re-render main calendar to reflect changes
         renderCalendar();
-        
-        // Sync to Google Drive
+
+        // Sync to Google Drive and show toast
         if (typeof DataStore !== 'undefined') {
-            await DataStore.saveData();
+            try {
+                await DataStore.saveData();
+                showToast('✓ Synced to Google Drive!');
+            } catch(e) {
+                showToast('Saved locally (sync failed)');
+            }
+        } else {
+            showToast('Saved!');
         }
     });
 
