@@ -410,6 +410,10 @@ body {
     box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
     transform: translateY(100%);
     transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+    /* Override .view's overflow-y so actions can stick to bottom */
+    overflow-y: hidden !important; 
+    display: flex;
+    flex-direction: column;
 }
 
 #view-logging.active {
@@ -419,6 +423,8 @@ body {
 #view-logging .home-scroll-content {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    overflow-y: auto; /* Calendar scrolls here now */
 }
 
 #view-logging .calendar-section {
@@ -427,17 +433,18 @@ body {
 }
 
 .logging-actions {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
+    /* No longer absolute, sits naturally at bottom of flex container */
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 80px;
     padding: 16px 24px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 20px));
     background-color: #FFFFFF;
     border-top: 1px solid var(--border-color);
     box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    flex-shrink: 0;
+    z-index: 10;
 }
 
 .text-button {

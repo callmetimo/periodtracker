@@ -242,6 +242,7 @@ function generateMonthGrid(year, month, isLogMode) {
         dayCell.textContent = day;
         
         const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        dayCell.setAttribute('data-date', dateString);
 
         const ring = document.createElement('div');
         ring.className = 'cal-day-ring';
@@ -256,7 +257,9 @@ function generateMonthGrid(year, month, isLogMode) {
             if (loggedDates.has(dateString)) {
                 dayCell.classList.add('logged-period');
             }
-            dayCell.addEventListener('click', () => {
+            dayCell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 const isAdding = !loggedDates.has(dateString);
                 
                 // Toggle a 5-day block forwards (day + 4)
@@ -269,10 +272,17 @@ function generateMonthGrid(year, month, isLogMode) {
                     } else {
                         loggedDates.delete(ds);
                     }
+
+                    // In-place DOM update without rebuilding the calendar
+                    const cellToUpdate = document.querySelector(`.cal-day[data-date="${ds}"]`);
+                    if (cellToUpdate) {
+                        if (isAdding) {
+                            cellToUpdate.classList.add('logged-period');
+                        } else {
+                            cellToUpdate.classList.remove('logged-period');
+                        }
+                    }
                 }
-                
-                // Re-render just the log calendar to reflect changes
-                renderLogCalendar();
             });
         } else {
             // Mock period days for display calendar
