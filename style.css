@@ -343,15 +343,6 @@ body {
     font-weight: bold;
 }
 
-/* Base Period Style (used in Home view) */
-.cal-day.period .cal-day-ring {
-    border-color: var(--primary-color);
-}
-.cal-day.period.period-solid .cal-day-ring {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-}
-
 /* Logging View Styles (Flo Match) */
 .cal-day.logged-period {
     color: var(--primary-color);

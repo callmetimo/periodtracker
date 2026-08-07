@@ -5,7 +5,7 @@ let allHistoryPeriodDates = new Set();
 function loadAllPeriodDates() {
     loggedDates = new Set();
     allHistoryPeriodDates = new Set();
-    
+
     // Load loggedDates
     try {
         const saved = localStorage.getItem('periodTrackerLoggedDates');
@@ -14,7 +14,7 @@ function loadAllPeriodDates() {
             loggedDates.forEach(d => allHistoryPeriodDates.add(d));
         }
     } catch(e) {}
-    
+
     // Load historical dates
     try {
         const hist = localStorage.getItem('periodTrackerHistory');
@@ -26,7 +26,7 @@ function loadAllPeriodDates() {
                     const parts = cycle.subtitle.split(sep).map(s => s.trim());
                     let d = new Date(parts[0] + ', ' + yearGroup.year);
                     if (isNaN(d)) d = new Date(parts[0]);
-                    
+
                     if (!isNaN(d)) {
                         const periodDays = cycle.dots ? cycle.dots.filter(dot => dot === 'p').length : 5;
                         for (let i = 0; i < periodDays; i++) {
@@ -44,16 +44,7 @@ function loadAllPeriodDates() {
 
 // Initial load
 loadAllPeriodDates();
-    
-window.addEventListener('periodTrackerDataLoaded', () => {
-    loadAllPeriodDates();
-    
-    updateWeekdaysHeaders();
-    renderCalendar();
-    renderLogCalendar();
-    initYearView();
-    document.querySelector('.history-filters .pill.active')?.click();
-});
+
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initHistoryView();
@@ -380,15 +371,6 @@ function generateMonthGrid(year, month, isLogMode) {
                     }
                 }
             });
-        } else {
-            // Mock period days for display calendar
-            if (loggedDates.has(dateString)) {
-                dayCell.classList.add('period', 'period-solid');
-            } else if (isCurrentMonth && (day === 6 || day === 7 || day === 8)) {
-                dayCell.classList.add('period', 'period-solid');
-            } else if (isCurrentMonth && (day === 9 || day === 10)) {
-                dayCell.classList.add('period');
-            }
         }
 
         grid.appendChild(dayCell);
@@ -512,13 +494,8 @@ function showCycleDetails(cycle) {
     
     fertileText.textContent = `It's likely that your fertile window lasted ${fCount} days`;
     ovulationText.textContent = `It's likely that you ovulated near the end of your fertile window`;
-    
-    if (cycle.title.includes('Current') || cycle.year === new Date().getFullYear()) {
-        periodText.textContent = `Your period lasted ${pCount} days`;
-    } else {
-        periodText.textContent = `Your period lasted ${pCount} days`;
-    }
-    
+    periodText.textContent = `Your period lasted ${pCount} days`;
+
     // Show view
     document.getElementById('view-cycle-details').classList.add('active');
 }
@@ -578,13 +555,9 @@ function initYearView() {
                 dayCell.className = 'mini-day';
                 dayCell.textContent = d;
 
-                // Simple mock coloring for visual pop
-                if (d >= 5 && d <= 9 && m % 2 === 0) {
-                    dayCell.classList.add('period');
-                }
-                if (d >= 21 && d <= 25 && m % 2 !== 0) {
-                    dayCell.classList.add('period');
-                }
+                // NOTE: real period/fertile/ovulation classification is wired up in a
+                // later refactor step once a single canonical data model exists; this
+                // view intentionally shows no highlighting until then rather than fake data.
 
                 grid.appendChild(dayCell);
             }
