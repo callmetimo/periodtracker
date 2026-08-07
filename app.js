@@ -451,9 +451,9 @@ function initCalendar() {
 }
 
 function renderCalendar() {
-    const container = document.getElementById('calendar-scroll-area');
-    if (!container) return;
-    container.innerHTML = '';
+    const scrollArea = document.getElementById('calendar-scroll-area');
+    if (!scrollArea) return;
+    scrollArea.innerHTML = '';
     
     const today = new Date();
     // Render past 6 months to future 6 months
