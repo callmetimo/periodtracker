@@ -163,7 +163,6 @@ function initNavigation() {
 }
 
 let logCurrentDate = new Date();
-const loggedDates = new Set(); // Store logged days (Format: YYYY-MM-DD)
 
 function generateMonthGrid(year, month, isLogMode) {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
