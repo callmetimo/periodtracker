@@ -30,10 +30,7 @@ function loadAllPeriodDates() {
                     if (!isNaN(d)) {
                         const periodDays = cycle.dots ? cycle.dots.filter(dot => dot === 'p').length : 5;
                         for (let i = 0; i < periodDays; i++) {
-                            const pDate = new Date(d);
-                            pDate.setDate(pDate.getDate() + i);
-                            const ds = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}-${String(pDate.getDate()).padStart(2, '0')}`;
-                            allHistoryPeriodDates.add(ds);
+                            allHistoryPeriodDates.add(DateUtils.toISODate(DateUtils.addDays(d, i)));
                         }
                     }
                 }
@@ -247,8 +244,7 @@ function handleLogDayActivate(dateString, year, month, day) {
     const isAdding = !loggedDates.has(dateString);
 
     for (let i = 0; i < 5; i++) {
-        const d = new Date(year, month, day + i);
-        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const ds = DateUtils.toISODate(new Date(year, month, day + i));
 
         if (isAdding) {
             loggedDates.add(ds);
@@ -310,7 +306,7 @@ function generateMonthGrid(year, month, isLogMode) {
         const dayCell = document.createElement('div');
         dayCell.className = 'cal-day';
         
-        const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dateString = DateUtils.toISODate(new Date(year, month, day));
         dayCell.setAttribute('data-date', dateString);
 
         if (isLogMode) {
@@ -371,8 +367,7 @@ function generateMonthGrid(year, month, isLogMode) {
             if (loggedDates.has(dateString)) {
                 dayCell.classList.add('logged-period');
                 // Determine if this is the start of a block
-                const prevDate = new Date(year, month, day - 1);
-                const prevDateStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
+                const prevDateStr = DateUtils.toISODate(new Date(year, month, day - 1));
 
                 if (!loggedDates.has(prevDateStr)) {
                     dayCell.classList.add('logged-period-start');

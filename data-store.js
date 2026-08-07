@@ -11,12 +11,13 @@ const DataStore = (() => {
   function toISO(str, fallbackYear) {
     const trimmed = str.trim();
     const hasYear = /\d{4}/.test(trimmed);
+    // Freeform "Mon D[, Year]" text, not an ISO string — local-midnight parsing
+    // here is correct and matches app.js. It's only the ISO string this
+    // produces that must never be re-parsed with `new Date(isoString)`
+    // downstream (see DateUtils.parseISODate for why).
     const d = new Date(hasYear ? trimmed : `${trimmed} ${fallbackYear}`);
     if (isNaN(d)) return trimmed; // keep raw string if parse fails
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+    return DateUtils.toISODate(d);
   }
 
   function parseCycleDates(subtitle, year) {
@@ -46,12 +47,9 @@ const DataStore = (() => {
           for (const cycle of yearGroup.cycles) {
             const { startDate } = parseCycleDates(cycle.subtitle, yearGroup.year);
             const periodDays = cycle.dots ? cycle.dots.filter(d => d === 'p').length : 5;
-            const start = new Date(startDate);
+            const start = DateUtils.parseISODate(startDate);
             for (let i = 0; i < periodDays; i++) {
-              const d = new Date(start);
-              d.setDate(d.getDate() + i);
-              const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-              allPeriodDays.add(ds);
+              allPeriodDays.add(DateUtils.toISODate(DateUtils.addDays(start, i)));
             }
           }
         }
@@ -75,9 +73,7 @@ const DataStore = (() => {
     const periods = [];
     let currentPeriod = [sortedDays[0]];
     for (let i = 1; i < sortedDays.length; i++) {
-      const curr = new Date(sortedDays[i]);
-      const prev = new Date(sortedDays[i-1]);
-      const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+      const diffDays = DateUtils.daysBetween(sortedDays[i-1], sortedDays[i]);
       if (diffDays <= 14) {
         currentPeriod.push(sortedDays[i]);
       } else {
@@ -107,14 +103,12 @@ const DataStore = (() => {
       let ovulationDay = "";
       
       if (i + 1 < periods.length) {
-        const currStart = new Date(startDate);
-        const nextStart = new Date(periods[i+1][0]);
-        cycleLength = Math.round((nextStart - currStart) / (1000 * 60 * 60 * 24));
-        
-        const endD = new Date(nextStart);
-        endD.setDate(endD.getDate() - 1);
-        endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,'0')}-${String(endD.getDate()).padStart(2,'0')}`;
-        
+        const nextStartIso = periods[i+1][0];
+        cycleLength = DateUtils.daysBetween(startDate, nextStartIso);
+
+        const endD = DateUtils.addDays(DateUtils.parseISODate(nextStartIso), -1);
+        endDate = DateUtils.toISODate(endD);
+
         ovulationDay = cycleLength - 14;
         if (ovulationDay < 1) ovulationDay = "";
       }
