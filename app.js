@@ -243,44 +243,61 @@ function generateMonthGrid(year, month, isLogMode) {
         const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         dayCell.setAttribute('data-date', dateString);
 
-        // Date number wrapper (allows positioning ring/check relative to number)
-        const numWrapper = document.createElement('div');
-        numWrapper.className = 'cal-day-num-wrapper';
-        numWrapper.textContent = day;
-        
-        // Ring for Flo style
-        const ring = document.createElement('div');
-        ring.className = 'cal-day-ring';
-        
-        // Checkmark for Flo style
-        const check = document.createElement('span');
-        check.className = 'material-icons-outlined cal-day-check';
-        check.textContent = 'check';
+        if (isLogMode) {
+            // Logging View (Flo Style)
+            dayCell.classList.add('log-mode-cell');
+            if (isCurrentMonth) {
+                dayCell.classList.add('current-month');
+            }
+            
+            const numWrapper = document.createElement('div');
+            numWrapper.className = 'cal-day-num-wrapper';
+            numWrapper.textContent = day;
+            numWrapper.style.pointerEvents = 'none'; // prevent swallowing clicks
+            
+            const ring = document.createElement('div');
+            ring.className = 'cal-day-ring';
+            ring.style.pointerEvents = 'none';
+            
+            const check = document.createElement('span');
+            check.className = 'material-icons-outlined cal-day-check';
+            check.textContent = 'check';
+            check.style.pointerEvents = 'none';
 
-        numWrapper.appendChild(ring);
-        numWrapper.appendChild(check);
+            numWrapper.appendChild(ring);
+            numWrapper.appendChild(check);
 
-        if (isCurrentMonth) {
-            dayCell.classList.add('current-month');
+            const isToday = isCurrentMonth && day === today.getDate();
+            if (isToday) {
+                dayCell.classList.add('today');
+                const todayLabel = document.createElement('div');
+                todayLabel.className = 'cal-day-today-label';
+                todayLabel.textContent = 'TODAY';
+                todayLabel.style.pointerEvents = 'none';
+                dayCell.appendChild(todayLabel);
+            }
+
+            dayCell.appendChild(numWrapper);
+        } else {
+            // Home View (Original Style)
+            dayCell.textContent = day;
+            
+            const ring = document.createElement('div');
+            ring.className = 'cal-day-ring';
+            dayCell.appendChild(ring);
+
+            const isToday = isCurrentMonth && day === today.getDate();
+            if (isToday) {
+                dayCell.classList.add('today');
+            }
         }
-
-        const isToday = isCurrentMonth && day === today.getDate();
-        if (isToday) {
-            dayCell.classList.add('today');
-            const todayLabel = document.createElement('div');
-            todayLabel.className = 'cal-day-today-label';
-            todayLabel.textContent = 'TODAY';
-            dayCell.appendChild(todayLabel);
-        }
-
-        dayCell.appendChild(numWrapper);
 
         if (isLogMode) {
             if (loggedDates.has(dateString)) {
                 dayCell.classList.add('logged-period');
             }
-            // Bind pointerdown instead of click for instant, reliable mobile response
-            dayCell.addEventListener('pointerdown', (e) => {
+            // Bind click event (pointer-events: none on children ensures it reliably hits the cell)
+            dayCell.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 
