@@ -535,10 +535,11 @@ function initLogCalendar() {
 
 function renderLogCalendar(scrollToCurrent = false) {
     const scrollArea = document.getElementById('log-calendar-scroll-area');
-    if (!scrollArea) return;
+    const scrollContainer = document.querySelector('#view-logging .home-scroll-content');
+    if (!scrollArea || !scrollContainer) return;
     
-    // Save scroll position
-    const scrollTop = scrollArea.scrollTop;
+    // Save scroll position relative to the actual scroll container
+    const scrollTop = scrollContainer.scrollTop;
     
     scrollArea.innerHTML = '';
     const today = new Date();
@@ -551,11 +552,19 @@ function renderLogCalendar(scrollToCurrent = false) {
         if (i === 0) currentMonthBlock = block;
     }
     
-    if (scrollToCurrent && currentMonthBlock && scrollArea) {
+    if (scrollToCurrent && currentMonthBlock) {
+        // Wait for the popup transition to finish before calculating offset
         setTimeout(() => {
-            scrollArea.scrollTop = currentMonthBlock.offsetTop;
-        }, 10);
+            let offset = currentMonthBlock.offsetTop;
+            let parent = currentMonthBlock.offsetParent;
+            while (parent && parent !== scrollContainer) {
+                offset += parent.offsetTop;
+                parent = parent.offsetParent;
+            }
+            // Subtract a little padding so the month title isn't glued to the top
+            scrollContainer.scrollTop = Math.max(0, offset - 20);
+        }, 150);
     } else {
-        scrollArea.scrollTop = scrollTop;
+        scrollContainer.scrollTop = scrollTop;
     }
 }
