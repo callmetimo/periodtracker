@@ -58,7 +58,7 @@ const Auth = (() => {
           <h1>Period Tracker</h1>
           <div id="authBody"></div>
         </div>`;
-      document.getElementById('auth-container').appendChild(el);
+      document.body.appendChild(el);
       this.el = el;
       return el;
     },
@@ -81,13 +81,8 @@ const Auth = (() => {
       if (s) s.textContent = msg || '';
     },
     hide() {
-      if (this.el) {
-        this.el.querySelector('#authBody').innerHTML = `
-          <p style="color: var(--primary-color); font-weight: bold; text-align: center; margin-bottom: 12px;">✓ Connected to Google Drive</p>
-          <button id="btn-signout" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 20px; width: 100%; cursor: pointer;">Sign Out</button>
-        `;
-        document.getElementById('btn-signout').addEventListener('click', () => signOut());
-      }
+      if (this.el) this.el.remove();
+      this.el = null;
     },
   };
 

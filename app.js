@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof Auth !== 'undefined') {
         Auth.start();
         Auth.markAppReady();
+        const btnSignOut = document.getElementById('btn-profile-signout');
+        if (btnSignOut) btnSignOut.addEventListener('click', () => Auth.signOut());
     }
 });
 
