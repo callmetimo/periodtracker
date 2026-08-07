@@ -216,7 +216,7 @@ function generateMonthGrid(year, month, isLogMode) {
     
     const title = document.createElement('div');
     title.className = 'calendar-month-title';
-    title.textContent = `${monthNames[month]} ${year}`;
+    title.textContent = isLogMode ? monthNames[month] : `${monthNames[month]} ${year}`;
     monthBlock.appendChild(title);
 
     const grid = document.createElement('div');
@@ -239,30 +239,55 @@ function generateMonthGrid(year, month, isLogMode) {
     for (let day = 1; day <= daysInMonth; day++) {
         const dayCell = document.createElement('div');
         dayCell.className = 'cal-day';
-        dayCell.textContent = day;
         
         const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         dayCell.setAttribute('data-date', dateString);
 
+        // Date number wrapper (allows positioning ring/check relative to number)
+        const numWrapper = document.createElement('div');
+        numWrapper.className = 'cal-day-num-wrapper';
+        numWrapper.textContent = day;
+        
+        // Ring for Flo style
         const ring = document.createElement('div');
         ring.className = 'cal-day-ring';
-        dayCell.appendChild(ring);
+        
+        // Checkmark for Flo style
+        const check = document.createElement('span');
+        check.className = 'material-icons-outlined cal-day-check';
+        check.textContent = 'check';
+
+        numWrapper.appendChild(ring);
+        numWrapper.appendChild(check);
+
+        if (isCurrentMonth) {
+            dayCell.classList.add('current-month');
+        }
 
         const isToday = isCurrentMonth && day === today.getDate();
         if (isToday) {
             dayCell.classList.add('today');
+            const todayLabel = document.createElement('div');
+            todayLabel.className = 'cal-day-today-label';
+            todayLabel.textContent = 'TODAY';
+            dayCell.appendChild(todayLabel);
         }
+
+        dayCell.appendChild(numWrapper);
 
         if (isLogMode) {
             if (loggedDates.has(dateString)) {
                 dayCell.classList.add('logged-period');
             }
-            dayCell.addEventListener('click', (e) => {
-                e.stopPropagation();
+            // Bind pointerdown instead of click for instant, reliable mobile response
+            dayCell.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                
+                // If it's already logged, we remove the whole block.
+                // For simplicity, we just toggle 5 days forward from the tapped date.
                 const isAdding = !loggedDates.has(dateString);
                 
-                // Toggle a 5-day block forwards (day + 4)
                 for (let i = 0; i < 5; i++) {
                     const d = new Date(year, month, day + i);
                     const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -273,13 +298,20 @@ function generateMonthGrid(year, month, isLogMode) {
                         loggedDates.delete(ds);
                     }
 
-                    // In-place DOM update without rebuilding the calendar
                     const cellToUpdate = document.querySelector(`.cal-day[data-date="${ds}"]`);
                     if (cellToUpdate) {
                         if (isAdding) {
                             cellToUpdate.classList.add('logged-period');
+                            // First day is solid, rest are dotted
+                            if (i === 0) {
+                                cellToUpdate.classList.add('logged-period-start');
+                                cellToUpdate.classList.remove('logged-period-predicted');
+                            } else {
+                                cellToUpdate.classList.add('logged-period-predicted');
+                                cellToUpdate.classList.remove('logged-period-start');
+                            }
                         } else {
-                            cellToUpdate.classList.remove('logged-period');
+                            cellToUpdate.classList.remove('logged-period', 'logged-period-start', 'logged-period-predicted');
                         }
                     }
                 }

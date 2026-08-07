@@ -238,13 +238,17 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    height: 48px;
-    font-size: 1rem;
-    color: var(--text-main);
+    justify-content: flex-end;
+    height: 70px;
+    font-size: 1.1rem;
+    color: var(--text-muted);
     position: relative;
     cursor: pointer;
-    z-index: 0; /* Creates stacking context so ring doesn't go behind page */
+    z-index: 0;
+}
+
+.cal-day.current-month {
+    color: var(--text-main);
 }
 
 .cal-day-empty {
@@ -252,49 +256,67 @@ body {
     pointer-events: none;
 }
 
-.cal-day.today {
-    font-weight: 700;
+.cal-day-today-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: #000;
+    margin-bottom: 2px;
 }
 
-.cal-day.today::before {
-    content: '';
-    position: absolute;
-    bottom: 2px;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background-color: var(--text-main);
+.cal-day-num-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .cal-day-ring {
-    position: absolute;
-    width: 36px;
-    height: 36px;
-    border: 2px solid #E5E5E5;
+    width: 24px;
+    height: 24px;
+    border: 2px solid #C4C4C4;
     border-radius: 50%;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: -1;
+    margin-top: 4px;
+    box-sizing: border-box;
 }
 
-.cal-day.period {
+.cal-day-check {
+    display: none;
+    font-size: 16px;
+    position: absolute;
+    bottom: 4px; /* Align with ring */
+    font-weight: bold;
+}
+
+/* Base Period Style (used in Home view) */
+.cal-day.period .cal-day-ring {
+    border-color: var(--primary-color);
+}
+.cal-day.period.period-solid .cal-day-ring {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Logging View Styles (Flo Match) */
+.cal-day.logged-period {
     color: var(--primary-color);
     font-weight: 600;
 }
 
-.cal-day.period .cal-day-ring {
-    border-color: var(--primary-color);
-    background-color: #FFF0F3;
-    border-style: dashed;
-}
-
-.cal-day.period-solid .cal-day-ring {
+.cal-day.logged-period-start .cal-day-ring {
     background-color: var(--primary-color);
     border-color: var(--primary-color);
-    border-style: solid;
 }
-.cal-day.period-solid {
-    color: white;
+.cal-day.logged-period-start .cal-day-check {
+    display: block;
+    color: #FFFFFF;
+}
+
+.cal-day.logged-period-predicted .cal-day-ring {
+    background-color: transparent;
+    border: 2px dashed var(--primary-color);
+}
+.cal-day.logged-period-predicted .cal-day-check {
+    display: block;
+    color: var(--primary-color);
 }
 
 /* Status Section */
@@ -432,12 +454,16 @@ body {
     height: auto;
 }
 
+#view-logging .calendar-scroll-area {
+    overflow-y: visible; /* Prevent nested scrolling issues */
+    flex: none;
+}
+
 .logging-actions {
     /* No longer absolute, sits naturally at bottom of flex container */
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
-    gap: 80px;
     padding: 16px 24px;
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 20px));
     background-color: #FFFFFF;
@@ -453,10 +479,12 @@ body {
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
+    color: var(--primary-color);
 }
 
 .text-button.text-muted {
-    color: var(--text-muted);
+    color: var(--primary-color);
+    opacity: 0.8;
 }
 
 .text-button.text-primary {
