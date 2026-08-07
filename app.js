@@ -164,25 +164,18 @@ function initNavigation() {
         document.getElementById('view-cycle-details').classList.remove('active');
     });
 
-    // Close bottom sheets when clicking outside
+    // Close cycle details sheet when clicking outside
     document.addEventListener('click', (e) => {
         const cycleDetails = document.getElementById('view-cycle-details');
-        const loggingView = document.getElementById('view-logging');
-
-        // Check Cycle Details
         if (cycleDetails.classList.contains('active')) {
             if (!cycleDetails.contains(e.target) && !e.target.closest('.history-card')) {
                 cycleDetails.classList.remove('active');
             }
         }
-
-        // Check Logging View
-        if (loggingView.classList.contains('active')) {
-            if (!loggingView.contains(e.target) && !e.target.closest('.nav-fab-container')) {
-                loggingView.classList.remove('active');
-            }
-        }
     });
+    // NOTE: The logging view (#view-logging) is intentionally NOT dismissed on outside-click.
+    // It only closes via the Cancel or Save buttons to prevent accidental dismissal when
+    // tapping date cells inside the scrollable calendar.
 
     initCalendar();
 }
