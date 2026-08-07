@@ -26,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initHistoryView();
     initYearView();
     initToggles();
+    if (typeof Auth !== 'undefined') {
+        Auth.start();
+        Auth.markAppReady();
+    }
 });
 
 function initToggles() {

@@ -31,6 +31,7 @@ const DataStore = (() => {
     if (existing) {
       spreadsheetId = existing.id;
       localStorage.setItem(LS_SS_ID, spreadsheetId);
+      await loadData();
       return;
     }
 
@@ -44,6 +45,7 @@ const DataStore = (() => {
     localStorage.setItem(LS_SS_ID, spreadsheetId);
 
     await SheetsClient.updateValues(spreadsheetId, 'Data!A1:B1', [['Key', 'Value']]);
+    await saveData(); // Push local seeded data up immediately
   }
 
   // ── DATA SYNC ────────────────────────────────────────────────
