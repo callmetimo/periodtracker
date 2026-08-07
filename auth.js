@@ -71,7 +71,7 @@ const Auth = (() => {
       this.el.querySelector('#authBody').innerHTML = `
         <p>Sign in with Google to sync your Period Tracker data securely.
            Your data stays in a private Google Sheet in your own Drive.</p>
-        <button id="signInBtn" type="button" style="background-color: var(--primary-color); color: white; border: none; padding: 12px 24px; border-radius: 24px; font-weight: 600; margin: 16px 0;">Sign in with Google</button>
+        <button id="signInBtn" type="button" style="background-color: var(--primary-color-contrast); color: white; border: none; padding: 12px 24px; border-radius: 24px; font-weight: 600; margin: 16px 0;">Sign in with Google</button>
         <p class="auth-status" id="authStatus" role="status" aria-live="polite"></p>`;
       this.el.querySelector('#signInBtn').addEventListener('click', () => signIn());
     },
