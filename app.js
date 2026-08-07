@@ -315,7 +315,7 @@ function generateMonthGrid(year, month, isLogMode) {
                         loggedDates.delete(ds);
                     }
 
-                    const cellToUpdate = document.querySelector(`.cal-day[data-date="${ds}"]`);
+                    const cellToUpdate = document.querySelector(`#view-logging .cal-day[data-date="${ds}"]`);
                     if (cellToUpdate) {
                         if (isAdding) {
                             cellToUpdate.classList.add('logged-period');
