@@ -1,4 +1,4 @@
-// Nota — thin wrapper over the Google Sheets/Drive REST APIs.
+// Period Tracker — thin wrapper over the Google Sheets/Drive REST APIs.
 // Every call is authorized with the signed-in user's own OAuth access token
 // (see auth.js) and only ever touches the one spreadsheet this app created
 // for that user (drive.file scope).

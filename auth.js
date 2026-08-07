@@ -1,4 +1,4 @@
-// Nota — Google sign-in (Google Identity Services token client).
+// Period Tracker — Google sign-in (Google Identity Services token client).
 // No backend: the browser holds a short-lived OAuth access token scoped to
 // drive.file (files this app creates) and talks to the Sheets API directly.
 //
@@ -52,11 +52,11 @@ const Auth = (() => {
     ensure() {
       if (this.el) return this.el;
       const el = document.createElement('div');
-      el.id = 'notaAuthOverlay';
+      el.id = 'authOverlay';
       el.innerHTML = `
-        <div class="nota-auth-card">
+        <div class="auth-card">
           <h1>Period Tracker</h1>
-          <div id="notaAuthBody"></div>
+          <div id="authBody"></div>
         </div>`;
       document.getElementById('auth-container').appendChild(el);
       this.el = el;
@@ -64,25 +64,25 @@ const Auth = (() => {
     },
     showSplash() {
       this.ensure();
-      this.el.querySelector('#notaAuthBody').innerHTML = `<p class="nota-auth-status" id="notaAuthStatus">Loading…</p>`;
+      this.el.querySelector('#authBody').innerHTML = `<p class="auth-status" id="authStatus">Loading…</p>`;
     },
     showSignIn() {
       this.ensure();
-      this.el.querySelector('#notaAuthBody').innerHTML = `
+      this.el.querySelector('#authBody').innerHTML = `
         <p>Sign in with Google to sync your Period Tracker data securely.
            Your data stays in a private Google Sheet in your own Drive.</p>
-        <button id="notaSignInBtn" type="button" style="background-color: var(--primary-color); color: white; border: none; padding: 12px 24px; border-radius: 24px; font-weight: 600; margin: 16px 0;">Sign in with Google</button>
-        <p class="nota-auth-status" id="notaAuthStatus"></p>`;
-      this.el.querySelector('#notaSignInBtn').addEventListener('click', () => signIn());
+        <button id="signInBtn" type="button" style="background-color: var(--primary-color); color: white; border: none; padding: 12px 24px; border-radius: 24px; font-weight: 600; margin: 16px 0;">Sign in with Google</button>
+        <p class="auth-status" id="authStatus"></p>`;
+      this.el.querySelector('#signInBtn').addEventListener('click', () => signIn());
     },
     setStatus(msg) {
       this.ensure();
-      const s = this.el.querySelector('#notaAuthStatus');
+      const s = this.el.querySelector('#authStatus');
       if (s) s.textContent = msg || '';
     },
     hide() {
       if (this.el) {
-        this.el.querySelector('#notaAuthBody').innerHTML = `
+        this.el.querySelector('#authBody').innerHTML = `
           <p style="color: var(--primary-color); font-weight: bold; text-align: center; margin-bottom: 12px;">✓ Connected to Google Drive</p>
           <button id="btn-signout" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 20px; width: 100%; cursor: pointer;">Sign Out</button>
         `;
@@ -94,8 +94,8 @@ const Auth = (() => {
   function initTokenClient() {
     if (tokenClient) return tokenClient;
     tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: NOTA_PUBLIC_CONFIG.GOOGLE_CLIENT_ID,
-      scope: NOTA_PUBLIC_CONFIG.GOOGLE_SCOPE,
+      client_id: CONFIG.GOOGLE_CLIENT_ID,
+      scope: CONFIG.GOOGLE_SCOPE,
       callback: () => {}, // overridden per-request below
     });
     return tokenClient;
@@ -153,7 +153,7 @@ const Auth = (() => {
   // spreadsheet before resolving both ready and _tokenReady.
   async function signIn() {
     overlay.showSignIn();
-    const btn = document.getElementById('notaSignInBtn');
+    const btn = document.getElementById('signInBtn');
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Connecting...';
@@ -164,7 +164,7 @@ const Auth = (() => {
       // returning user, or shows the consent screen if this is genuinely new —
       // avoids re-showing consent every time once the user has granted access once.
       await requestToken('');
-      overlay.setStatus('Setting up your Nota spreadsheet…');
+      overlay.setStatus('Setting up your Period Tracker spreadsheet…');
       await DataStore.bootstrap();
       _deferredMode = false;
       readyResolve();
