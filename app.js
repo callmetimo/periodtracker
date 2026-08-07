@@ -31,6 +31,23 @@ document.addEventListener('DOMContentLoaded', () => {
         Auth.markAppReady();
         const btnSignOut = document.getElementById('btn-profile-signout');
         if (btnSignOut) btnSignOut.addEventListener('click', () => Auth.signOut());
+
+        const btnSyncNow = document.getElementById('btn-sync-now');
+        if (btnSyncNow) btnSyncNow.addEventListener('click', async () => {
+            btnSyncNow.textContent = 'Syncing…';
+            btnSyncNow.disabled = true;
+            try {
+                await Auth.triggerFirstTapSync();
+                await DataStore.saveData();
+                btnSyncNow.textContent = '✓ Synced!';
+            } catch (e) {
+                btnSyncNow.textContent = '✗ Sync failed – try again';
+            }
+            setTimeout(() => {
+                btnSyncNow.textContent = '↑ Sync to Google Drive Now';
+                btnSyncNow.disabled = false;
+            }, 3000);
+        });
     }
 });
 

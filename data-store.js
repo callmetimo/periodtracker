@@ -31,7 +31,8 @@ const DataStore = (() => {
     if (existing) {
       spreadsheetId = existing.id;
       localStorage.setItem(LS_SS_ID, spreadsheetId);
-      await loadData();
+      await loadData(); // Pull any data already in the sheet
+      await saveData(); // Push local history up (in case sheet is empty)
       return;
     }
 
