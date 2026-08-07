@@ -23,7 +23,13 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 // triggerFirstTapSync gets/renews the OAuth token (works from a real tap)
                 await Auth.triggerFirstTapSync();
-                await DataStore.saveData();
+                await DataStore.syncReconcile();
+                // Reconcile may have pulled in periods that only existed in the
+                // cloud (e.g. logged on another device) — refresh everything.
+                refreshHomeView();
+                const activeFilterPill = document.querySelector('.history-filters .pill.active');
+                if (activeFilterPill) activeFilterPill.click(); else renderHistoryList('all');
+                initYearView();
                 btnSyncNow.textContent = '✓ Synced to Google Drive!';
             } catch (e) {
                 console.error('[Sync Now] failed:', e);
@@ -170,7 +176,13 @@ function initNavigation() {
         // Sync to Google Drive and show toast
         if (typeof DataStore !== 'undefined') {
             try {
-                await DataStore.saveData();
+                await DataStore.syncReconcile();
+                // Reconcile may have merged in cloud-only periods (e.g. logged on
+                // another device) — refresh once more to reflect the true merged state.
+                refreshHomeView();
+                const filterPill = document.querySelector('.history-filters .pill.active');
+                if (filterPill) filterPill.click(); else renderHistoryList('all');
+                initYearView();
                 showToast('✓ Synced to Google Drive!');
             } catch(e) {
                 showToast('Saved locally (sync failed)');
