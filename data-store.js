@@ -32,12 +32,62 @@ const DataStore = (() => {
   // ── ROW BUILDER ───────────────────────────────────────────────
   // Parses historicalCycles from localStorage into structured sheet rows.
   function buildRows() {
-    const raw = localStorage.getItem('periodTrackerHistory');
-    if (!raw) return null;
+    const rawHist = localStorage.getItem('periodTrackerHistory');
+    const rawLogged = localStorage.getItem('periodTrackerLoggedDates');
+    
+    // 1. Gather all period days into a Set
+    const allPeriodDays = new Set();
+    
+    // Add historical period days
+    if (rawHist) {
+      try {
+        const historicalCycles = JSON.parse(rawHist);
+        for (const yearGroup of historicalCycles) {
+          for (const cycle of yearGroup.cycles) {
+            const { startDate } = parseCycleDates(cycle.subtitle, yearGroup.year);
+            const periodDays = cycle.dots ? cycle.dots.filter(d => d === 'p').length : 5;
+            const start = new Date(startDate);
+            for (let i = 0; i < periodDays; i++) {
+              const d = new Date(start);
+              d.setDate(d.getDate() + i);
+              const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              allPeriodDays.add(ds);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    
+    // Add newly logged period days
+    if (rawLogged) {
+      try {
+        const logged = JSON.parse(rawLogged);
+        logged.forEach(ds => allPeriodDays.add(ds));
+      } catch (e) {}
+    }
+    
+    if (allPeriodDays.size === 0) return null;
 
-    let historicalCycles;
-    try { historicalCycles = JSON.parse(raw); } catch { return null; }
-
+    // 2. Sort all days chronologically
+    const sortedDays = Array.from(allPeriodDays).sort();
+    
+    // 3. Group into periods (gaps > 14 days mean a new period)
+    const periods = [];
+    let currentPeriod = [sortedDays[0]];
+    for (let i = 1; i < sortedDays.length; i++) {
+      const curr = new Date(sortedDays[i]);
+      const prev = new Date(sortedDays[i-1]);
+      const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 14) {
+        currentPeriod.push(sortedDays[i]);
+      } else {
+        periods.push(currentPeriod);
+        currentPeriod = [sortedDays[i]];
+      }
+    }
+    periods.push(currentPeriod);
+    
+    // 4. Build Rows
     const header = [
       'Start Date',
       'End Date',
@@ -45,24 +95,33 @@ const DataStore = (() => {
       'Period Days',
       'Ovulation Day (day # in cycle)',
     ];
-
+    
     const dataRows = [];
-    for (const yearGroup of historicalCycles) {
-      for (const cycle of yearGroup.cycles) {
-        const { startDate, endDate } = parseCycleDates(cycle.subtitle, yearGroup.year);
-        const dots = cycle.dots || [];
-        const periodDays    = dots.filter(d => d === 'p').length;
-        const ovIdx         = dots.indexOf('o');
-        const ovulationDay  = ovIdx >= 0 ? ovIdx + 1 : ''; // 1-indexed
-        const cycleLength   = parseInt(cycle.title) || dots.length;
-
-        dataRows.push([startDate, endDate, cycleLength, periodDays, ovulationDay]);
+    for (let i = 0; i < periods.length; i++) {
+      const period = periods[i];
+      const startDate = period[0];
+      const periodDays = period.length;
+      
+      let cycleLength = "";
+      let endDate = "";
+      let ovulationDay = "";
+      
+      if (i + 1 < periods.length) {
+        const currStart = new Date(startDate);
+        const nextStart = new Date(periods[i+1][0]);
+        cycleLength = Math.round((nextStart - currStart) / (1000 * 60 * 60 * 24));
+        
+        const endD = new Date(nextStart);
+        endD.setDate(endD.getDate() - 1);
+        endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,'0')}-${String(endD.getDate()).padStart(2,'0')}`;
+        
+        ovulationDay = cycleLength - 14;
+        if (ovulationDay < 1) ovulationDay = "";
       }
+      
+      dataRows.push([startDate, endDate, cycleLength, periodDays, ovulationDay]);
     }
-
-    // Sort oldest → newest by start date
-    dataRows.sort((a, b) => (a[0] < b[0] ? -1 : 1));
-
+    
     return [header, ...dataRows];
   }
 
