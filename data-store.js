@@ -25,17 +25,24 @@ const DataStore = (() => {
   }
 
   async function bootstrap() {
-    if (spreadsheetId) return;
+    if (spreadsheetId) {
+      // Already have a cached sheet — just sync, no need to search Drive.
+      await loadData();
+      await saveData();
+      return;
+    }
 
+    // First ever sign-in: search Drive for an existing sheet before creating one.
     const existing = await findExistingSpreadsheet();
     if (existing) {
       spreadsheetId = existing.id;
       localStorage.setItem(LS_SS_ID, spreadsheetId);
-      await loadData(); // Pull any data already in the sheet
-      await saveData(); // Push local history up (in case sheet is empty)
+      await loadData();
+      await saveData();
       return;
     }
 
+    // Brand new user: create the spreadsheet.
     const created = await SheetsClient.create({
       properties: { title: 'Period Tracker Data' },
       sheets: [

@@ -271,10 +271,8 @@ const Auth = (() => {
     } catch (err) { console.warn('[auth] revoke failed', err); }
     accessToken = null;
     tokenExpiresAt = 0;
-    localStorage.removeItem('periodTracker_spreadsheetId');
-    localStorage.removeItem('periodTracker_opexSheetId');
-    localStorage.removeItem('periodTracker_investSheetId');
-    localStorage.removeItem('periodTracker_splitMigratedV1'); // migration flag — reset so it re-runs if the user signs into a different account
+    // NOTE: We deliberately keep periodTracker_spreadsheetId in localStorage
+    // so the next sign-in reuses the same spreadsheet instead of creating a new one.
     location.reload();
   }
 
