@@ -103,7 +103,7 @@ const DataStore = (() => {
     // Brand new: create the spreadsheet then write data.
     const created = await SheetsClient.create({
       properties: { title: 'Period Tracker Data' },
-      sheets: [{ properties: { title: 'Cycles', sheetId: 0 } }],
+      sheets: [{ properties: { title: 'Data', sheetId: 0 } }],
     });
     spreadsheetId = created.spreadsheetId;
     localStorage.setItem(LS_SS_ID, spreadsheetId);
@@ -118,10 +118,10 @@ const DataStore = (() => {
     if (!rows) throw new Error('No history data found in local storage');
 
     // Clear old content then write fresh structured rows
-    await SheetsClient.clearValues(spreadsheetId, 'Cycles!A1:Z1000');
+    await SheetsClient.clearValues(spreadsheetId, 'Data!A1:Z1000');
     await SheetsClient.updateValues(
       spreadsheetId,
-      `Cycles!A1:E${rows.length}`,
+      `Data!A1:E${rows.length}`,
       rows,
       'RAW'
     );
