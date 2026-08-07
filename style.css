@@ -856,3 +856,20 @@ body {
 #authOverlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-color); z-index: 9999; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; }
 .auth-card { background: var(--card-bg); padding: 32px 24px; border-radius: 24px; box-shadow: var(--shadow-sm); width: 100%; max-width: 400px; }
 .auth-status { color: var(--text-muted); font-size: 14px; margin-top: 16px; }
+
+/* Short viewports (small phones, or any phone in landscape orientation) — the
+   logging bottom sheet's fixed-height header/action-bar chrome combined with a
+   height:75% sheet can otherwise squeeze the scrollable calendar down to a
+   near-unusable sliver. Give the sheet almost the full screen and shrink the
+   log-mode day cells so more of the grid fits without scrolling. */
+@media (max-height: 600px) {
+    #view-logging {
+        height: 92%;
+    }
+    .cal-day.log-mode-cell {
+        height: 56px;
+    }
+    #view-cycle-details {
+        max-height: 95%;
+    }
+}
