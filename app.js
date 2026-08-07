@@ -37,16 +37,18 @@ document.addEventListener('DOMContentLoaded', () => {
             btnSyncNow.textContent = 'Syncing…';
             btnSyncNow.disabled = true;
             try {
+                // triggerFirstTapSync gets/renews the OAuth token (works from a real tap)
                 await Auth.triggerFirstTapSync();
                 await DataStore.saveData();
-                btnSyncNow.textContent = '✓ Synced!';
+                btnSyncNow.textContent = '✓ Synced to Google Drive!';
             } catch (e) {
-                btnSyncNow.textContent = '✗ Sync failed – try again';
+                console.error('[Sync Now] failed:', e);
+                btnSyncNow.textContent = '✗ Failed: ' + (e.message || 'unknown error');
             }
             setTimeout(() => {
                 btnSyncNow.textContent = '↑ Sync to Google Drive Now';
                 btnSyncNow.disabled = false;
-            }, 3000);
+            }, 4000);
         });
     }
 });

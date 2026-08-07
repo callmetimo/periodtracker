@@ -80,25 +80,18 @@ const DataStore = (() => {
   }
 
   async function saveData() {
-    if (!spreadsheetId) return;
-    try {
-      // Gather data from localStorage
-      // We must make sure app.js is storing loggedDates! Currently app.js holds it in memory
-      // I'll update app.js to save it to localStorage.
-      const loggedDates = localStorage.getItem('periodTrackerLoggedDates') || '[]';
-      const historyData = localStorage.getItem('periodTrackerHistory') || '[]';
-      
-      const rows = [
-        ['periodTrackerLoggedDates', loggedDates],
-        ['periodTrackerHistory', historyData]
-      ];
-      
-      // We assume they fit in A2:B3
-      await SheetsClient.updateValues(spreadsheetId, 'Data!A2:B3', rows);
-      console.log('[DataStore.saveData] successfully synced to Google Sheets.');
-    } catch (e) {
-      console.error('[DataStore.saveData] failed', e);
-    }
+    if (!spreadsheetId) throw new Error('No spreadsheet connected');
+    const loggedDates = localStorage.getItem('periodTrackerLoggedDates') || '[]';
+    const historyData = localStorage.getItem('periodTrackerHistory') || '[]';
+
+    const rows = [
+      ['periodTrackerLoggedDates', loggedDates],
+      ['periodTrackerHistory', historyData],
+    ];
+
+    // RAW so Sheets doesn't try to parse the JSON as a formula/number
+    await SheetsClient.updateValues(spreadsheetId, 'Data!A2:B3', rows, 'RAW');
+    console.log('[DataStore.saveData] synced to Google Sheets ✓');
   }
 
   return { bootstrap, loadData, saveData };
