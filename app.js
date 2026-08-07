@@ -1,51 +1,14 @@
 // App main logic
-let loggedDates = new Set();
-let allHistoryPeriodDates = new Set();
-
-function loadAllPeriodDates() {
-    loggedDates = new Set();
-    allHistoryPeriodDates = new Set();
-
-    // Load loggedDates
-    try {
-        const saved = localStorage.getItem('periodTrackerLoggedDates');
-        if (saved) {
-            loggedDates = new Set(JSON.parse(saved));
-            loggedDates.forEach(d => allHistoryPeriodDates.add(d));
-        }
-    } catch(e) {}
-
-    // Load historical dates
-    try {
-        const hist = localStorage.getItem('periodTrackerHistory');
-        if (hist) {
-            const historicalCycles = JSON.parse(hist);
-            for (const yearGroup of historicalCycles) {
-                for (const cycle of yearGroup.cycles) {
-                    const sep = cycle.subtitle.includes('–') ? '–' : '-';
-                    const parts = cycle.subtitle.split(sep).map(s => s.trim());
-                    let d = new Date(parts[0] + ', ' + yearGroup.year);
-                    if (isNaN(d)) d = new Date(parts[0]);
-
-                    if (!isNaN(d)) {
-                        const periodDays = cycle.dots ? cycle.dots.filter(dot => dot === 'p').length : 5;
-                        for (let i = 0; i < periodDays; i++) {
-                            allHistoryPeriodDates.add(DateUtils.toISODate(DateUtils.addDays(d, i)));
-                        }
-                    }
-                }
-            }
-        }
-    } catch(e) {}
-}
-
-// Initial load
-loadAllPeriodDates();
+//
+// All period/cycle data now flows through PeriodModel (period-model.js) — see
+// that file for why. This file is purely about rendering views from it and
+// handling user interaction.
 
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initHistoryView();
     initYearView();
+    refreshHomeView();
     initToggles();
     if (typeof Auth !== 'undefined') {
         Auth.start();
@@ -81,7 +44,7 @@ function initToggles() {
         pill.addEventListener('click', () => {
             historyPills.forEach(p => p.classList.remove('active'));
             pill.classList.add('active');
-            
+
             const text = pill.textContent.toLowerCase();
             if (text.includes('3')) {
                 renderHistoryList('3');
@@ -105,9 +68,9 @@ function initToggles() {
             weekStartPills.forEach(p => p.classList.remove('active'));
             pill.classList.add('active');
             localStorage.setItem('periodTrackerWeekStart', pill.getAttribute('data-val'));
-            
+
             updateWeekdaysHeaders();
-            renderCalendar();
+            refreshHomeView();
             renderLogCalendar();
             initYearView();
         });
@@ -162,7 +125,7 @@ function updateWeekdaysHeaders() {
 function initNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
     const views = document.querySelectorAll('.view');
-    
+
     updateWeekdaysHeaders();
 
     navItems.forEach(item => {
@@ -188,13 +151,21 @@ function initNavigation() {
     });
 
     document.getElementById('log-cancel').addEventListener('click', () => {
+        // Discard whatever was staged in this session — nothing was persisted.
+        stagedPeriods = null;
         document.getElementById('view-logging').classList.remove('active');
     });
 
     document.getElementById('log-save').addEventListener('click', async () => {
-        localStorage.setItem('periodTrackerLoggedDates', JSON.stringify(Array.from(loggedDates)));
+        if (stagedPeriods) {
+            PeriodModel.setPeriods(stagedPeriods);
+            stagedPeriods = null;
+        }
         document.getElementById('view-logging').classList.remove('active');
-        renderCalendar();
+        refreshHomeView();
+        const activeFilterPill = document.querySelector('.history-filters .pill.active');
+        if (activeFilterPill) activeFilterPill.click(); else renderHistoryList('all');
+        initYearView();
 
         // Sync to Google Drive and show toast
         if (typeof DataStore !== 'undefined') {
@@ -236,50 +207,63 @@ function initNavigation() {
 
 let logCurrentDate = new Date();
 
+// In-memory working copy of PeriodModel.getPeriods() while the log-calendar
+// sheet is open. Taps mutate this, not localStorage, so Cancel can discard
+// them — only Save commits via PeriodModel.setPeriods(). null when the sheet
+// isn't open (renderCalendar/initYearView/renderHistoryList always read the
+// persisted PeriodModel state directly).
+let stagedPeriods = null;
+
 // Shared by both the click and keydown (Enter/Space) handlers on a log-mode
 // calendar day cell, so keyboard users get the identical toggle behavior.
-function handleLogDayActivate(dateString, year, month, day) {
-    // If it's already logged, we remove the whole block.
-    // For simplicity, we just toggle 5 days forward from the tapped date.
-    const isAdding = !loggedDates.has(dateString);
+// Clears/adds the whole real contiguous period the tapped date belongs to
+// (via PeriodModel.findPeriodIn), not a fixed-size slice from the tap point.
+function handleLogDayActivate(dateString) {
+    const existing = PeriodModel.findPeriodIn(stagedPeriods, dateString);
 
-    for (let i = 0; i < 5; i++) {
-        const ds = DateUtils.toISODate(new Date(year, month, day + i));
-
-        if (isAdding) {
-            loggedDates.add(ds);
-        } else {
-            loggedDates.delete(ds);
+    if (existing) {
+        const start = DateUtils.parseISODate(existing.startDate);
+        for (let i = 0; i < existing.periodDayCount; i++) {
+            setLogCellState(DateUtils.toISODate(DateUtils.addDays(start, i)), null);
         }
-
-        const cellToUpdate = document.querySelector(`#view-logging .cal-day[data-date="${ds}"]`);
-        if (cellToUpdate) {
-            if (isAdding) {
-                cellToUpdate.classList.add('logged-period');
-                // First day is solid, rest are dotted
-                if (i === 0) {
-                    cellToUpdate.classList.add('logged-period-start');
-                    cellToUpdate.classList.remove('logged-period-predicted');
-                } else {
-                    cellToUpdate.classList.add('logged-period-predicted');
-                    cellToUpdate.classList.remove('logged-period-start');
-                }
-            } else {
-                cellToUpdate.classList.remove('logged-period', 'logged-period-start', 'logged-period-predicted');
-            }
-            cellToUpdate.setAttribute('aria-label',
-                cellToUpdate.getAttribute('aria-label').replace(/, logged as period day$/, '') +
-                (isAdding ? ', logged as period day' : ''));
+        stagedPeriods = PeriodModel.removePeriodFrom(stagedPeriods, existing.startDate);
+    } else {
+        stagedPeriods = PeriodModel.addPeriodTo(stagedPeriods, dateString, 5);
+        // Re-fetch: addPeriodTo may have merged the new 5-day block with an
+        // adjacent existing period into a longer single period.
+        const finalPeriod = PeriodModel.findPeriodIn(stagedPeriods, dateString);
+        const start = DateUtils.parseISODate(finalPeriod.startDate);
+        for (let i = 0; i < finalPeriod.periodDayCount; i++) {
+            setLogCellState(DateUtils.toISODate(DateUtils.addDays(start, i)), i === 0 ? 'start' : 'continuation');
         }
     }
 }
 
-function generateMonthGrid(year, month, isLogMode) {
+// state: 'start' | 'continuation' | null (cleared). Only touches cells
+// currently rendered in the log calendar's ±12/+2 month window — a date
+// outside that window updates in stagedPeriods but its DOM cell (if any)
+// picks up the change on the next full renderLogCalendar() call.
+function setLogCellState(dateString, state) {
+    const cell = document.querySelector(`#view-logging .cal-day[data-date="${dateString}"]`);
+    if (!cell) return;
+    const baseLabel = cell.getAttribute('aria-label').replace(/, logged as period day$/, '');
+    if (state === null) {
+        cell.classList.remove('logged-period', 'logged-period-start', 'logged-period-predicted');
+        cell.setAttribute('aria-label', baseLabel);
+    } else {
+        cell.classList.add('logged-period');
+        cell.classList.toggle('logged-period-start', state === 'start');
+        cell.classList.toggle('logged-period-predicted', state === 'continuation');
+        cell.setAttribute('aria-label', baseLabel + ', logged as period day');
+    }
+}
+
+function generateMonthGrid(year, month, isLogMode, cycles) {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    
+
     const monthBlock = document.createElement('div');
     monthBlock.className = 'calendar-month-block';
-    
+
     const title = document.createElement('div');
     title.className = 'calendar-month-title';
     title.textContent = isLogMode ? monthNames[month] : `${monthNames[month]} ${year}`;
@@ -287,7 +271,7 @@ function generateMonthGrid(year, month, isLogMode) {
 
     const grid = document.createElement('div');
     grid.className = 'calendar-grid';
-    
+
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const weekStart = getWeekStartSetting();
@@ -305,7 +289,7 @@ function generateMonthGrid(year, month, isLogMode) {
     for (let day = 1; day <= daysInMonth; day++) {
         const dayCell = document.createElement('div');
         dayCell.className = 'cal-day';
-        
+
         const dateString = DateUtils.toISODate(new Date(year, month, day));
         dayCell.setAttribute('data-date', dateString);
 
@@ -315,16 +299,16 @@ function generateMonthGrid(year, month, isLogMode) {
             if (isCurrentMonth) {
                 dayCell.classList.add('current-month');
             }
-            
+
             const numWrapper = document.createElement('div');
             numWrapper.className = 'cal-day-num-wrapper';
             numWrapper.textContent = day;
             numWrapper.style.pointerEvents = 'none'; // prevent swallowing clicks
-            
+
             const ring = document.createElement('div');
             ring.className = 'cal-day-ring';
             ring.style.pointerEvents = 'none';
-            
+
             const check = document.createElement('span');
             check.className = 'material-icons-outlined cal-day-check';
             check.textContent = 'check';
@@ -347,7 +331,7 @@ function generateMonthGrid(year, month, isLogMode) {
         } else {
             // Home View (Original Style)
             dayCell.textContent = day;
-            
+
             const ring = document.createElement('div');
             ring.className = 'cal-day-ring';
             dayCell.appendChild(ring);
@@ -357,33 +341,31 @@ function generateMonthGrid(year, month, isLogMode) {
                 dayCell.classList.add('today');
             }
 
-            // Real period days from combined history + logged dates
-            if (allHistoryPeriodDates.has(dateString)) {
+            if (PeriodModel.classifyDate(dateString, cycles) === 'period') {
                 dayCell.classList.add('period', 'period-solid');
             }
         }
 
         if (isLogMode) {
-            if (loggedDates.has(dateString)) {
+            const period = PeriodModel.findPeriodIn(stagedPeriods, dateString);
+            let labelSuffix = '';
+            if (period) {
                 dayCell.classList.add('logged-period');
-                // Determine if this is the start of a block
-                const prevDateStr = DateUtils.toISODate(new Date(year, month, day - 1));
-
-                if (!loggedDates.has(prevDateStr)) {
+                if (dateString === period.startDate) {
                     dayCell.classList.add('logged-period-start');
                 } else {
                     dayCell.classList.add('logged-period-predicted');
                 }
+                labelSuffix = ', logged as period day';
             }
 
             // Keyboard/screen-reader operability: this cell is a real toggle
             // control, not just a clickable div.
             dayCell.setAttribute('role', 'button');
             dayCell.setAttribute('tabindex', '0');
-            dayCell.setAttribute('aria-label',
-                `${monthNames[month]} ${day}, ${year}` + (loggedDates.has(dateString) ? ', logged as period day' : ''));
+            dayCell.setAttribute('aria-label', `${monthNames[month]} ${day}, ${year}${labelSuffix}`);
 
-            const activateLogDay = () => handleLogDayActivate(dateString, year, month, day);
+            const activateLogDay = () => handleLogDayActivate(dateString);
 
             // Bind click event (pointer-events: none on children ensures it reliably hits the cell)
             dayCell.addEventListener('click', (e) => {
@@ -402,7 +384,7 @@ function generateMonthGrid(year, month, isLogMode) {
 
         grid.appendChild(dayCell);
     }
-    
+
     monthBlock.appendChild(grid);
     return monthBlock;
 }
@@ -411,48 +393,73 @@ function initHistoryView() {
     renderHistoryList('all');
 }
 
+// e.g. "28 days" / "28 days (predicted)" for the still-open latest cycle.
+function formatCycleTitle(cycle) {
+    return cycle.predicted ? `${cycle.cycleLength} days (predicted)` : `${cycle.cycleLength} days`;
+}
+
+// e.g. "Jan 1 – Jan 28" (or "Jan 1, 2025 – Jan 28, 2025" across a year boundary).
+function formatCycleSubtitle(cycle) {
+    const start = DateUtils.parseISODate(cycle.startDate);
+    const end = DateUtils.parseISODate(cycle.endDate);
+    return `${DateUtils.formatDisplayDate(start)} – ${DateUtils.formatDisplayDate(end)}`;
+}
+
+// Builds a dot-per-day visualization (period/fertile/ovulation/blank) for one
+// computed cycle, on the fly — replaces the old hand-authored `dots` arrays.
+function cycleToDots(cycle) {
+    const dots = [];
+    const start = DateUtils.parseISODate(cycle.startDate);
+    for (let i = 0; i < cycle.cycleLength; i++) {
+        const ds = DateUtils.toISODate(DateUtils.addDays(start, i));
+        if (i < cycle.periodDayCount) {
+            dots.push('p');
+        } else if (ds === cycle.ovulationDate) {
+            dots.push('o');
+        } else if (cycle.fertileWindow && ds >= cycle.fertileWindow.start && ds <= cycle.fertileWindow.end) {
+            dots.push('f');
+        } else {
+            dots.push('');
+        }
+    }
+    return dots;
+}
+
 function renderHistoryList(limit) {
     const container = document.getElementById('history-list-container');
     if (!container) return;
 
-    let historyData = [];
-    try {
-        const stored = localStorage.getItem('periodTrackerHistory');
-        if (stored) {
-            historyData = JSON.parse(stored);
-        }
-    } catch(e) {
-        console.error("Failed to load history data", e);
-    }
-
-    // Flatten cycles to apply limit across years
-    let allCycles = [];
-    historyData.forEach(yearGroup => {
-        yearGroup.cycles.forEach(cycle => {
-            allCycles.push({ year: yearGroup.year, cycle: cycle });
-        });
-    });
+    // Most recent first.
+    let cycles = PeriodModel.computeCycles().slice().sort((a, b) => b.startDate.localeCompare(a.startDate));
 
     if (limit !== 'all') {
         const num = parseInt(limit, 10);
-        allCycles = allCycles.slice(0, num);
+        cycles = cycles.slice(0, num);
     }
 
-    // Re-group by year
+    // Group by the year of each cycle's start date.
     const grouped = [];
-    allCycles.forEach(item => {
-        let group = grouped.find(g => g.year === item.year);
+    cycles.forEach(cycle => {
+        const year = DateUtils.parseISODate(cycle.startDate).getFullYear();
+        let group = grouped.find(g => g.year === year);
         if (!group) {
-            group = { year: item.year, cycles: [] };
+            group = { year, cycles: [] };
             grouped.push(group);
         }
-        group.cycles.push(item.cycle);
+        group.cycles.push(cycle);
     });
 
     container.innerHTML = '';
-    
+
+    if (!cycles.length) {
+        const empty = document.createElement('p');
+        empty.style.cssText = 'text-align:center; color: var(--text-muted); margin-top: 24px;';
+        empty.textContent = 'No cycles logged yet — tap + to log your first period.';
+        container.appendChild(empty);
+        return;
+    }
+
     grouped.forEach(yearGroup => {
-        // Add Year Header
         const yearHeader = document.createElement('h3');
         yearHeader.className = 'history-year-header';
         yearHeader.textContent = yearGroup.year;
@@ -463,14 +470,13 @@ function renderHistoryList(limit) {
             card.className = 'history-card';
 
             const title = document.createElement('h4');
-            title.textContent = cycle.title;
+            title.textContent = formatCycleTitle(cycle);
             const subtitle = document.createElement('p');
-            subtitle.textContent = cycle.subtitle;
+            subtitle.textContent = formatCycleSubtitle(cycle);
 
             const dotsContainer = document.createElement('div');
             dotsContainer.className = 'cycle-dots';
-
-            cycle.dots.forEach(d => {
+            cycleToDots(cycle).forEach(d => {
                 const dot = document.createElement('div');
                 dot.className = `cycle-dot ${d}`;
                 dotsContainer.appendChild(dot);
@@ -482,11 +488,9 @@ function renderHistoryList(limit) {
 
             card.setAttribute('role', 'button');
             card.setAttribute('tabindex', '0');
-            card.setAttribute('aria-label', `Cycle ${cycle.title}, ${cycle.subtitle}. View details.`);
+            card.setAttribute('aria-label', `Cycle ${title.textContent}, ${subtitle.textContent}. View details.`);
 
-            card.addEventListener('click', () => {
-                showCycleDetails(cycle);
-            });
+            card.addEventListener('click', () => showCycleDetails(cycle));
             card.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
                     e.preventDefault();
@@ -500,40 +504,33 @@ function renderHistoryList(limit) {
 }
 
 function showCycleDetails(cycle) {
-    // Populate header
-    document.getElementById('detail-cycle-title').textContent = `Cycle length: ${cycle.title}`;
-    
-    // Parse start date from subtitle (e.g. "Jan 1 – Jan 28")
-    const parts = cycle.subtitle.split('–');
-    const startText = parts[0] ? parts[0].trim() : cycle.subtitle;
-    document.getElementById('detail-cycle-start').textContent = `Started ${startText}`;
+    document.getElementById('detail-cycle-title').textContent = `Cycle length: ${formatCycleTitle(cycle)}`;
+    document.getElementById('detail-cycle-start').textContent =
+        `Started ${DateUtils.formatDisplayDate(DateUtils.parseISODate(cycle.startDate))}`;
 
-    // Populate dots
     const dotsContainer = document.getElementById('detail-cycle-dots');
     dotsContainer.innerHTML = '';
-    
-    let pCount = 0;
-    let fCount = 0;
-    
-    cycle.dots.forEach(d => {
+    cycleToDots(cycle).forEach(d => {
         const dot = document.createElement('div');
         dot.className = `cycle-dot ${d}`;
         dotsContainer.appendChild(dot);
-        
-        if (d === 'p') pCount++;
-        if (d === 'f') fCount++;
     });
-    
-    // Insights text
+
     const fertileText = document.getElementById('detail-fertile-text');
     const ovulationText = document.getElementById('detail-ovulation-text');
     const periodText = document.getElementById('detail-period-text');
-    
-    fertileText.textContent = `It's likely that your fertile window lasted ${fCount} days`;
-    ovulationText.textContent = `It's likely that you ovulated near the end of your fertile window`;
-    periodText.textContent = `Your period lasted ${pCount} days`;
 
-    // Show view
+    if (cycle.fertileWindow) {
+        const fStart = DateUtils.formatDisplayDate(DateUtils.parseISODate(cycle.fertileWindow.start));
+        const fEnd = DateUtils.formatDisplayDate(DateUtils.parseISODate(cycle.fertileWindow.end));
+        fertileText.textContent = `It's likely that your fertile window lasted from ${fStart} to ${fEnd}`;
+        ovulationText.textContent = `It's likely that you ovulated on ${DateUtils.formatDisplayDate(DateUtils.parseISODate(cycle.ovulationDate))}`;
+    } else {
+        fertileText.textContent = 'Not enough data yet to estimate a fertile window';
+        ovulationText.textContent = 'Not enough data yet to estimate ovulation';
+    }
+    periodText.textContent = `Your period lasted ${cycle.periodDayCount} days`;
+
     document.getElementById('view-cycle-details').classList.add('active');
 }
 
@@ -543,20 +540,15 @@ function initYearView() {
 
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     wrapper.innerHTML = '';
-    
-    let years = [2024, 2025, 2026];
-    try {
-        const stored = localStorage.getItem('periodTrackerHistory');
-        if (stored) {
-            const historyData = JSON.parse(stored);
-            years = historyData.map(group => group.year);
-            // Sort ascending to have oldest on top (2020 down to 2026).
-            years.sort((a, b) => a - b);
-        }
-    } catch(e) {
-        console.error("Failed to load years from history data", e);
-    }
-    
+
+    const cycles = PeriodModel.computeCycles();
+    const currentYear = new Date().getFullYear();
+    let years = cycles.length
+        ? Array.from(new Set(cycles.map(c => DateUtils.parseISODate(c.startDate).getFullYear())))
+        : [currentYear];
+    if (!years.includes(currentYear)) years.push(currentYear);
+    years.sort((a, b) => a - b);
+
     years.forEach(year => {
         const yearTitle = document.createElement('h2');
         yearTitle.className = 'year-title';
@@ -569,7 +561,7 @@ function initYearView() {
         for (let m = 0; m < 12; m++) {
             const monthDiv = document.createElement('div');
             monthDiv.className = 'mini-month';
-            
+
             const title = document.createElement('h4');
             title.textContent = monthNames[m];
             monthDiv.appendChild(title);
@@ -592,9 +584,9 @@ function initYearView() {
                 dayCell.className = 'mini-day';
                 dayCell.textContent = d;
 
-                // NOTE: real period/fertile/ovulation classification is wired up in a
-                // later refactor step once a single canonical data model exists; this
-                // view intentionally shows no highlighting until then rather than fake data.
+                const dateString = DateUtils.toISODate(new Date(year, m, d));
+                const cls = PeriodModel.classifyDate(dateString, cycles);
+                if (cls) dayCell.classList.add(cls);
 
                 grid.appendChild(dayCell);
             }
@@ -606,27 +598,81 @@ function initYearView() {
     });
 }
 
-function initCalendar() {
-    renderCalendar();
+// Populates the Home view's "My Cycles" stat cards and the daily status
+// card from real computed cycles — both used to be static placeholder text.
+function updateHomeStats(cycles) {
+    const cycleLengthEl = document.getElementById('stat-cycle-length');
+    const periodLengthEl = document.getElementById('stat-period-length');
+    const statusTitleEl = document.getElementById('daily-status-title');
+    const statusDescEl = document.getElementById('daily-status-desc');
+    if (!cycleLengthEl || !periodLengthEl || !statusTitleEl || !statusDescEl) return;
+
+    if (!cycles.length) {
+        cycleLengthEl.textContent = '—';
+        periodLengthEl.textContent = '—';
+        statusTitleEl.textContent = 'Log your first period';
+        statusDescEl.textContent = 'Tap + to get started';
+        return;
+    }
+
+    // "Previous" = the most recently *completed* cycle if one exists,
+    // otherwise fall back to the only (still-open) cycle there is.
+    const completed = cycles.filter(c => !c.predicted);
+    const reference = completed.length ? completed[completed.length - 1] : cycles[cycles.length - 1];
+    cycleLengthEl.textContent = `${reference.cycleLength} days`;
+    periodLengthEl.textContent = `${reference.periodDayCount} days`;
+
+    const latest = cycles[cycles.length - 1];
+    const todayIso = DateUtils.toISODate(new Date());
+
+    if (todayIso >= latest.startDate && todayIso <= latest.periodEndDate) {
+        const dayNum = DateUtils.daysBetween(latest.startDate, todayIso) + 1;
+        statusTitleEl.textContent = 'Period in progress';
+        statusDescEl.textContent = `Day ${dayNum} of your period`;
+    } else if (latest.predicted) {
+        const nextStart = DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(latest.startDate), latest.cycleLength));
+        const daysUntil = DateUtils.daysBetween(todayIso, nextStart);
+        if (daysUntil >= 0) {
+            statusTitleEl.textContent = daysUntil === 0 ? 'Period likely to start today' : `Period likely in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+        } else {
+            statusTitleEl.textContent = 'Period may be late';
+        }
+        statusDescEl.textContent = 'Based on your past cycles';
+    } else {
+        statusTitleEl.textContent = 'Tracking your cycle';
+        statusDescEl.textContent = 'Based on your past cycles';
+    }
 }
 
-function renderCalendar() {
+function initCalendar() {
+    refreshHomeView();
+}
+
+// Recomputes cycles once and re-renders every Home-view piece that depends
+// on them (calendar + stat cards + status), so they can never drift apart.
+function refreshHomeView() {
+    const cycles = PeriodModel.computeCycles();
+    renderCalendar(cycles);
+    updateHomeStats(cycles);
+}
+
+function renderCalendar(cycles = PeriodModel.computeCycles()) {
     const scrollArea = document.getElementById('calendar-scroll-area');
     if (!scrollArea) return;
     scrollArea.innerHTML = '';
-    
+
     const today = new Date();
     // Render past 6 months to future 6 months
     let currentMonthBlock = null;
 
     for (let i = -6; i <= 6; i++) {
         const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false);
+        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false, cycles);
         scrollArea.appendChild(block);
-        
+
         if (i === 0) currentMonthBlock = block;
     }
-    
+
     // Scroll to current month without scrolling parent containers
     setTimeout(() => {
         if (currentMonthBlock && scrollArea) {
@@ -636,6 +682,7 @@ function renderCalendar() {
 }
 
 function initLogCalendar() {
+    stagedPeriods = PeriodModel.getPeriods().map(p => ({ ...p }));
     renderLogCalendar(true); // pass true to center it on first load
 }
 
@@ -643,10 +690,11 @@ function renderLogCalendar(scrollToCurrent = false) {
     const scrollArea = document.getElementById('log-calendar-scroll-area');
     const scrollContainer = document.querySelector('#view-logging .home-scroll-content');
     if (!scrollArea || !scrollContainer) return;
-    
+    if (!stagedPeriods) stagedPeriods = PeriodModel.getPeriods().map(p => ({ ...p }));
+
     // Save scroll position relative to the actual scroll container
     const scrollTop = scrollContainer.scrollTop;
-    
+
     scrollArea.innerHTML = '';
     const today = new Date();
     let currentMonthBlock = null;
@@ -657,7 +705,7 @@ function renderLogCalendar(scrollToCurrent = false) {
         scrollArea.appendChild(block);
         if (i === 0) currentMonthBlock = block;
     }
-    
+
     if (scrollToCurrent && currentMonthBlock) {
         // Wait for the popup transition to finish before calculating offset
         setTimeout(() => {

@@ -55,7 +55,7 @@
                             <div class="stat-row">
                                 <div class="stat-info">
                                     <span class="stat-label">Previous cycle length</span>
-                                    <span class="stat-value">28 days</span>
+                                    <span class="stat-value" id="stat-cycle-length">—</span>
                                 </div>
                                 <div class="stat-badge normal">
                                     <span class="material-icons-outlined" aria-hidden="true">check_circle</span> NORMAL
@@ -65,7 +65,7 @@
                             <div class="stat-row">
                                 <div class="stat-info">
                                     <span class="stat-label">Previous period length</span>
-                                    <span class="stat-value">5 days</span>
+                                    <span class="stat-value" id="stat-period-length">—</span>
                                 </div>
                                 <div class="stat-badge normal">
                                     <span class="material-icons-outlined" aria-hidden="true">check_circle</span> NORMAL
@@ -94,8 +94,6 @@
                         <span class="legend-item"><span class="dot ovulation"></span> Ovulation</span>
                     </div>
 
-                    <h3 class="history-year-header">2026</h3>
-                    
                     <div class="history-list" id="history-list-container">
                         <!-- JS will populate history cards here -->
                     </div>
@@ -234,6 +232,7 @@
     <!-- Scripts -->
     <script src="config.js"></script>
     <script src="date-utils.js"></script>
+    <script src="period-model.js"></script>
     <script src="sheets-client.js"></script>
     <script src="data-store.js"></script>
     <script src="auth.js"></script>
