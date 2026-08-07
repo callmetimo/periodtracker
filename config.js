@@ -1,4 +1,5 @@
 // Period Tracker — Google Cloud OAuth configuration.
+// See README.md for the overall architecture and guidelines before making changes.
 //
 // To set up your own copy:
 //   1. Create a Google Cloud project.
