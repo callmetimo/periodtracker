@@ -1,19 +1,52 @@
 // App main logic
 let loggedDates = new Set();
-try {
-    const saved = localStorage.getItem('periodTrackerLoggedDates');
-    if (saved) {
-        loggedDates = new Set(JSON.parse(saved));
-    }
-} catch(e) {}
+let allHistoryPeriodDates = new Set();
 
-window.addEventListener('periodTrackerDataLoaded', () => {
+function loadAllPeriodDates() {
+    loggedDates = new Set();
+    allHistoryPeriodDates = new Set();
+    
+    // Load loggedDates
     try {
         const saved = localStorage.getItem('periodTrackerLoggedDates');
         if (saved) {
             loggedDates = new Set(JSON.parse(saved));
+            loggedDates.forEach(d => allHistoryPeriodDates.add(d));
         }
     } catch(e) {}
+    
+    // Load historical dates
+    try {
+        const hist = localStorage.getItem('periodTrackerHistory');
+        if (hist) {
+            const historicalCycles = JSON.parse(hist);
+            for (const yearGroup of historicalCycles) {
+                for (const cycle of yearGroup.cycles) {
+                    const sep = cycle.subtitle.includes('–') ? '–' : '-';
+                    const parts = cycle.subtitle.split(sep).map(s => s.trim());
+                    let d = new Date(parts[0] + ', ' + yearGroup.year);
+                    if (isNaN(d)) d = new Date(parts[0]);
+                    
+                    if (!isNaN(d)) {
+                        const periodDays = cycle.dots ? cycle.dots.filter(dot => dot === 'p').length : 5;
+                        for (let i = 0; i < periodDays; i++) {
+                            const pDate = new Date(d);
+                            pDate.setDate(pDate.getDate() + i);
+                            const ds = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}-${String(pDate.getDate()).padStart(2, '0')}`;
+                            allHistoryPeriodDates.add(ds);
+                        }
+                    }
+                }
+            }
+        }
+    } catch(e) {}
+}
+
+// Initial load
+loadAllPeriodDates();
+    
+window.addEventListener('periodTrackerDataLoaded', () => {
+    loadAllPeriodDates();
     
     updateWeekdaysHeaders();
     renderCalendar();
@@ -290,11 +323,25 @@ function generateMonthGrid(year, month, isLogMode) {
             if (isToday) {
                 dayCell.classList.add('today');
             }
+
+            // Real period days from combined history + logged dates
+            if (allHistoryPeriodDates.has(dateString)) {
+                dayCell.classList.add('period', 'period-solid');
+            }
         }
 
         if (isLogMode) {
             if (loggedDates.has(dateString)) {
                 dayCell.classList.add('logged-period');
+                // Determine if this is the start of a block
+                const prevDate = new Date(year, month, day - 1);
+                const prevDateStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
+                
+                if (!loggedDates.has(prevDateStr)) {
+                    dayCell.classList.add('logged-period-start');
+                } else {
+                    dayCell.classList.add('logged-period-predicted');
+                }
             }
             // Bind click event (pointer-events: none on children ensures it reliably hits the cell)
             dayCell.addEventListener('click', (e) => {
