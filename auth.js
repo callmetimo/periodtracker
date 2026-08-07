@@ -281,4 +281,4 @@ const Auth = (() => {
   return { start, signIn, signOut, getAccessToken, triggerFirstTapSync, ready, markAppReady };
 })();
 
-window.addEventListener('DOMContentLoaded', () => Auth.start());
+// Auth.start() is called by app.js after all scripts are loaded.
