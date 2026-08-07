@@ -7,6 +7,8 @@
     --border-color: #F0F0F0;
     --nav-bg: #FFFFFF;
     --shadow: 0 -2px 10px rgba(0, 0, 0, 0.03);
+    --card-bg: #FFFFFF;
+    --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.08);
     --font-family: 'Inter', sans-serif;
 }
 
@@ -343,12 +345,14 @@ body {
     font-weight: bold;
 }
 
-/* Logging View Styles (Flo Match) */
-.cal-day.logged-period {
-    color: var(--primary-color);
-    font-weight: 600;
+/* Logging View Styles (Flo Match)
+   Two distinct states, each owning its own text color, ring, and checkmark —
+   no shared ".logged-period" rule, so there's nothing left for a later cascade
+   collision to silently override. */
+.cal-day.logged-period-start {
+    color: #FFFFFF;
+    font-weight: 700;
 }
-
 .cal-day.logged-period-start .cal-day-ring {
     background-color: var(--primary-color);
     border-color: var(--primary-color);
@@ -358,6 +362,10 @@ body {
     color: #FFFFFF;
 }
 
+.cal-day.logged-period-predicted {
+    color: var(--primary-color);
+    font-weight: 600;
+}
 .cal-day.logged-period-predicted .cal-day-ring {
     background-color: transparent;
     border: 2px dashed var(--primary-color);
@@ -540,24 +548,6 @@ body {
 .text-button.text-primary {
     color: var(--primary-color);
     font-weight: 600;
-}
-
-.cal-day.logged-period .cal-day-ring {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    border-style: solid;
-}
-.cal-day.logged-period {
-    color: white;
-    font-weight: 700;
-}
-
-.cal-day.logged-period::after {
-    content: 'check';
-    font-family: 'Material Icons Outlined';
-    font-size: 16px;
-    position: absolute;
-    color: white;
 }
 
 /* History View */
