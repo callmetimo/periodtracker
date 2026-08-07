@@ -13,6 +13,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof Auth !== 'undefined') {
         Auth.start();
         Auth.markAppReady();
+
+        // The one-shot first-tap listener auth.js's deferred-auth design depends
+        // on (see its header comment) — without this, a returning user's first
+        // Sheets sync call would hang forever waiting for a tap that nothing
+        // ever asked for. triggerFirstTapSync() itself no-ops when not in
+        // deferred mode, so registering this unconditionally is safe.
+        document.addEventListener('click', () => {
+            Auth.triggerFirstTapSync().catch(err => console.warn('[auth] first-tap sync failed', err));
+        }, { once: true });
+
         const btnSignOut = document.getElementById('btn-profile-signout');
         if (btnSignOut) btnSignOut.addEventListener('click', () => Auth.signOut());
 

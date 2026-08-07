@@ -14,11 +14,15 @@
 //             cache (full opex history, current month) instantly.
 //   Phase 2 — All Google Sheets API calls block on _tokenReady. This private
 //             promise resolves only when the user makes their first physical
-//             tap on the screen. index.html registers a one-shot listener that
-//             calls Auth.triggerFirstTapSync() on that tap, which triggers an
+//             tap on the screen. app.js's DOMContentLoaded handler registers a
+//             one-shot document-level listener that calls
+//             Auth.triggerFirstTapSync() on that tap, which triggers an
 //             interactive Google token request (iOS allows popups from within
 //             a real gesture handler). Once the token arrives, all queued
-//             network calls fire simultaneously.
+//             network calls fire simultaneously. getAccessToken()'s wait on
+//             _tokenReady is bounded by a timeout, so a tap that never comes
+//             (or a first-tap request that hangs) surfaces as a catchable
+//             error instead of hanging every Sheets call forever.
 //
 // New users (no cached spreadsheetId) still get the classic flow:
 //   splash → silent attempt → Sign in with Google button.
@@ -208,9 +212,16 @@ const Auth = (() => {
   async function getAccessToken() {
     if (accessToken && Date.now() < tokenExpiresAt - 60000) return accessToken;
 
-    // In deferred mode, patiently wait for the first-tap sync to provide a token.
+    // In deferred mode, wait for the first-tap sync to provide a token — but
+    // bounded. Nothing guarantees the tap happens (or that triggerFirstTapSync's
+    // own request resolves) within any particular window, and an unbounded wait
+    // here is exactly what made every Sheets call hang forever with no error
+    // when the first-tap listener wasn't wired up. 20s comfortably covers a
+    // real user's first interaction; past that, surface a catchable error.
     if (_deferredMode) {
-      await _tokenReady;
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timed out waiting for sign-in — tap Sync Now in Profile')), 20000));
+      await Promise.race([_tokenReady, timeout]);
       if (accessToken && Date.now() < tokenExpiresAt - 60000) return accessToken;
     }
 
