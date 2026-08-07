@@ -135,6 +135,8 @@ function showToast(message) {
     if (existing) existing.remove();
     const toast = document.createElement('div');
     toast.id = 'app-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
     toast.textContent = message;
     toast.style.cssText = `
         position: fixed; bottom: 88px; right: 16px; z-index: 9999;
@@ -210,8 +212,13 @@ function initNavigation() {
         }
     });
 
-    document.getElementById('back-to-history').addEventListener('click', () => {
-        document.getElementById('view-cycle-details').classList.remove('active');
+    const closeCycleDetails = () => document.getElementById('view-cycle-details').classList.remove('active');
+    document.getElementById('back-to-history').addEventListener('click', closeCycleDetails);
+    document.getElementById('back-to-history').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+            e.preventDefault();
+            closeCycleDetails();
+        }
     });
 
     // Close cycle details sheet when clicking outside
@@ -231,6 +238,45 @@ function initNavigation() {
 }
 
 let logCurrentDate = new Date();
+
+// Shared by both the click and keydown (Enter/Space) handlers on a log-mode
+// calendar day cell, so keyboard users get the identical toggle behavior.
+function handleLogDayActivate(dateString, year, month, day) {
+    // If it's already logged, we remove the whole block.
+    // For simplicity, we just toggle 5 days forward from the tapped date.
+    const isAdding = !loggedDates.has(dateString);
+
+    for (let i = 0; i < 5; i++) {
+        const d = new Date(year, month, day + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+        if (isAdding) {
+            loggedDates.add(ds);
+        } else {
+            loggedDates.delete(ds);
+        }
+
+        const cellToUpdate = document.querySelector(`#view-logging .cal-day[data-date="${ds}"]`);
+        if (cellToUpdate) {
+            if (isAdding) {
+                cellToUpdate.classList.add('logged-period');
+                // First day is solid, rest are dotted
+                if (i === 0) {
+                    cellToUpdate.classList.add('logged-period-start');
+                    cellToUpdate.classList.remove('logged-period-predicted');
+                } else {
+                    cellToUpdate.classList.add('logged-period-predicted');
+                    cellToUpdate.classList.remove('logged-period-start');
+                }
+            } else {
+                cellToUpdate.classList.remove('logged-period', 'logged-period-start', 'logged-period-predicted');
+            }
+            cellToUpdate.setAttribute('aria-label',
+                cellToUpdate.getAttribute('aria-label').replace(/, logged as period day$/, '') +
+                (isAdding ? ', logged as period day' : ''));
+        }
+    }
+}
 
 function generateMonthGrid(year, month, isLogMode) {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -327,48 +373,34 @@ function generateMonthGrid(year, month, isLogMode) {
                 // Determine if this is the start of a block
                 const prevDate = new Date(year, month, day - 1);
                 const prevDateStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
-                
+
                 if (!loggedDates.has(prevDateStr)) {
                     dayCell.classList.add('logged-period-start');
                 } else {
                     dayCell.classList.add('logged-period-predicted');
                 }
             }
+
+            // Keyboard/screen-reader operability: this cell is a real toggle
+            // control, not just a clickable div.
+            dayCell.setAttribute('role', 'button');
+            dayCell.setAttribute('tabindex', '0');
+            dayCell.setAttribute('aria-label',
+                `${monthNames[month]} ${day}, ${year}` + (loggedDates.has(dateString) ? ', logged as period day' : ''));
+
+            const activateLogDay = () => handleLogDayActivate(dateString, year, month, day);
+
             // Bind click event (pointer-events: none on children ensures it reliably hits the cell)
             dayCell.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                
-                // If it's already logged, we remove the whole block.
-                // For simplicity, we just toggle 5 days forward from the tapped date.
-                const isAdding = !loggedDates.has(dateString);
-                
-                for (let i = 0; i < 5; i++) {
-                    const d = new Date(year, month, day + i);
-                    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                    
-                    if (isAdding) {
-                        loggedDates.add(ds);
-                    } else {
-                        loggedDates.delete(ds);
-                    }
-
-                    const cellToUpdate = document.querySelector(`#view-logging .cal-day[data-date="${ds}"]`);
-                    if (cellToUpdate) {
-                        if (isAdding) {
-                            cellToUpdate.classList.add('logged-period');
-                            // First day is solid, rest are dotted
-                            if (i === 0) {
-                                cellToUpdate.classList.add('logged-period-start');
-                                cellToUpdate.classList.remove('logged-period-predicted');
-                            } else {
-                                cellToUpdate.classList.add('logged-period-predicted');
-                                cellToUpdate.classList.remove('logged-period-start');
-                            }
-                        } else {
-                            cellToUpdate.classList.remove('logged-period', 'logged-period-start', 'logged-period-predicted');
-                        }
-                    }
+                activateLogDay();
+            });
+            dayCell.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    activateLogDay();
                 }
             });
         }
@@ -452,9 +484,19 @@ function renderHistoryList(limit) {
             card.appendChild(title);
             card.appendChild(subtitle);
             card.appendChild(dotsContainer);
-            
+
+            card.setAttribute('role', 'button');
+            card.setAttribute('tabindex', '0');
+            card.setAttribute('aria-label', `Cycle ${cycle.title}, ${cycle.subtitle}. View details.`);
+
             card.addEventListener('click', () => {
                 showCycleDetails(cycle);
+            });
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                    e.preventDefault();
+                    showCycleDetails(cycle);
+                }
             });
 
             container.appendChild(card);

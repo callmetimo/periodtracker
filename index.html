@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Period Tracker</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
             <!-- Home View -->
             <div id="view-home" class="view active">
                 <header class="app-header">
-                    <div class="logo" style="margin-right: auto; margin-left: auto;">Period Tracker</div>
+                    <h1 class="logo" style="margin-right: auto; margin-left: auto;">Period Tracker</h1>
                     <!-- Empty div to balance flex layout if we add icons later -->
                 </header>
                 
@@ -39,10 +39,10 @@
                     <div class="status-section">
                         <div class="status-card">
                             <div class="status-icon">
-                                <span class="material-icons-outlined">water_drop</span>
+                                <span class="material-icons-outlined" aria-hidden="true">water_drop</span>
                             </div>
                             <div class="status-text">
-                                <h3 id="daily-status-title">Period likely to start</h3>
+                                <h2 id="daily-status-title">Period likely to start</h2>
                                 <p id="daily-status-desc">Based on your past cycles</p>
                             </div>
                         </div>
@@ -58,7 +58,7 @@
                                     <span class="stat-value">28 days</span>
                                 </div>
                                 <div class="stat-badge normal">
-                                    <span class="material-icons-outlined">check_circle</span> NORMAL
+                                    <span class="material-icons-outlined" aria-hidden="true">check_circle</span> NORMAL
                                 </div>
                             </div>
                             <div class="stat-divider"></div>
@@ -68,7 +68,7 @@
                                     <span class="stat-value">5 days</span>
                                 </div>
                                 <div class="stat-badge normal">
-                                    <span class="material-icons-outlined">check_circle</span> NORMAL
+                                    <span class="material-icons-outlined" aria-hidden="true">check_circle</span> NORMAL
                                 </div>
                             </div>
                         </div>
@@ -118,7 +118,7 @@
             <div id="view-cycle-details" class="view" style="z-index: 30;">
                 <header class="app-header" style="background-color: #F5F5F5; border-top-left-radius: 24px; border-top-right-radius: 24px;">
                     <h2 style="margin-left: auto; margin-right: auto;">Cycle details</h2>
-                    <span class="material-icons-outlined" id="back-to-history" style="cursor: pointer; font-size: 24px; position: absolute; right: 20px;">close</span>
+                    <span class="material-icons-outlined" id="back-to-history" role="button" tabindex="0" aria-label="Close cycle details" style="cursor: pointer; font-size: 24px; position: absolute; right: 20px;">close</span>
                 </header>
                 <div class="home-scroll-content">
                     <!-- Cycle Summary Card -->
@@ -134,19 +134,19 @@
                     <div class="detail-card insights-card">
                         <div class="insight-row">
                             <div class="insight-icon icon-fertile">
-                                <span class="material-icons-outlined">bubble_chart</span>
+                                <span class="material-icons-outlined" aria-hidden="true">bubble_chart</span>
                             </div>
                             <div class="insight-text" id="detail-fertile-text">It's likely that your fertile window lasted from Jul 18 to 24</div>
                         </div>
                         <div class="insight-row">
                             <div class="insight-icon icon-ovulation">
-                                <span class="material-icons-outlined">adjust</span>
+                                <span class="material-icons-outlined" aria-hidden="true">adjust</span>
                             </div>
                             <div class="insight-text" id="detail-ovulation-text">It's likely that you ovulated on Jul 22</div>
                         </div>
                         <div class="insight-row">
                             <div class="insight-icon icon-period">
-                                <span class="material-icons-outlined">water_drop</span>
+                                <span class="material-icons-outlined" aria-hidden="true">water_drop</span>
                             </div>
                             <div class="insight-text" id="detail-period-text">Your period lasted 5 days</div>
                         </div>
@@ -208,24 +208,24 @@
         <!-- Bottom Navigation -->
         <nav class="bottom-nav">
             <button class="nav-item active" data-target="view-home">
-                <span class="material-icons-outlined">calendar_today</span>
+                <span class="material-icons-outlined" aria-hidden="true">calendar_today</span>
                 <span>Today</span>
             </button>
             <button class="nav-item" data-target="view-history">
-                <span class="material-icons-outlined">history</span>
+                <span class="material-icons-outlined" aria-hidden="true">history</span>
                 <span>History</span>
             </button>
             <div class="nav-fab-container">
-                <button class="nav-fab" id="fab-button">
-                    <span class="material-icons-outlined">add</span>
+                <button class="nav-fab" id="fab-button" aria-label="Log period">
+                    <span class="material-icons-outlined" aria-hidden="true">add</span>
                 </button>
             </div>
             <button class="nav-item" data-target="view-year">
-                <span class="material-icons-outlined">calendar_view_month</span>
+                <span class="material-icons-outlined" aria-hidden="true">calendar_view_month</span>
                 <span>Year</span>
             </button>
             <button class="nav-item" data-target="view-profile">
-                <span class="material-icons-outlined">person</span>
+                <span class="material-icons-outlined" aria-hidden="true">person</span>
                 <span>Profile</span>
             </button>
         </nav>
