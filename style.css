@@ -266,6 +266,20 @@ body {
     font-weight: 700;
 }
 
+/* Fixed-size box for the ring + number in the Home view, kept separate
+   from the "TODAY" label so the label always stacks cleanly above it
+   instead of both being centered on the whole (taller, when a label is
+   present) cell and overlapping. */
+.cal-day-circle {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
 .cal-day-ring {
     position: absolute;
     width: 36px;
@@ -273,7 +287,8 @@ body {
     border: 2px solid #E5E5E5;
     border-radius: 50%;
     top: 50%;
-    transform: translateY(-50%);
+    left: 50%;
+    transform: translate(-50%, -50%);
     z-index: -1;
 }
 
@@ -348,12 +363,34 @@ body {
     margin-bottom: 2px;
 }
 
-/* Home-view cells are 48px tall (vs. log-mode's 70px) — shrink the label
-   so it doesn't crowd the day number. */
+/* Home-view "today": a muted uppercase caption above an elevated, shadowed
+   circle — the label is smaller and lighter than the log-mode label (which
+   sits in a taller 70px cell) so it doesn't crowd the day number. */
 .cal-day:not(.log-mode-cell) .cal-day-today-label {
     font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
     margin-bottom: 0;
     line-height: 1;
+}
+
+.cal-day.today .cal-day-ring {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+/* Plain "today" (no period/predicted/premenstrual classification) gets a
+   solid, high-contrast filled circle so it still reads as elevated even
+   with no other marking on the day. When today also carries one of those
+   classifications, its own color/ring styling wins and only the box-shadow
+   above adds the "elevated" cue. */
+.cal-day.today:not(.period):not(.period-predicted):not(.premenstrual):not(.premenstrual-predicted) .cal-day-ring {
+    background-color: var(--text-main);
+    border-color: var(--text-main);
+    border-style: solid;
+}
+.cal-day.today:not(.period):not(.period-predicted):not(.premenstrual):not(.premenstrual-predicted) {
+    color: #FFFFFF;
 }
 
 .cal-day-num-wrapper {
