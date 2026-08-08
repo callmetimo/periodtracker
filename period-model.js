@@ -143,24 +143,38 @@ const PeriodModel = (() => {
     return findPeriodIn(getPeriods(), dateStr);
   }
 
+  // Weighted moving average of the last up to 6 known cycle lengths, most
+  // recent weighted highest ([1,2,...,k]). Falls back to 28 with no history.
+  // Exposed publicly so it's independently testable and so any future caller
+  // (e.g. a dev-console backtest) has exactly one formula to call, not two
+  // copies that could quietly drift apart.
+  function estimateCycleLength(knownLengths) {
+    if (!knownLengths.length) return 28;
+    const k = Math.min(knownLengths.length, 6);
+    const recent = knownLengths.slice(-k);
+    const weights = Array.from({ length: k }, (_, i) => i + 1);
+    const weightSum = weights.reduce((a, b) => a + b, 0);
+    const weighted = recent.reduce((sum, len, i) => sum + len * weights[i], 0);
+    return Math.round(weighted / weightSum);
+  }
+
   // Computed cycle records, one per period, sorted chronologically. Every
   // field beyond startDate/periodDayCount is derived, never stored:
   //  - periodEndDate: last day of actual bleeding (startDate + periodDayCount - 1)
   //  - endDate: last day of the whole cycle (day before the next period starts)
   //  - cycleLength / ovulationDate / fertileWindow: known for every period
-  //    except the most recent one, which is estimated from the average of
-  //    prior cycles (28 days if there's no prior data) and flagged
-  //    predicted:true so callers can label it differently and the Sheets
-  //    export can leave it blank rather than writing a guess as fact.
+  //    except the most recent one, which is estimated via a recency-weighted
+  //    average of the last up to 6 prior cycles (28 days if there's no prior
+  //    data) and flagged predicted:true so callers can label it differently
+  //    and the Sheets export can leave it blank rather than writing a guess
+  //    as fact.
   function computeCycles(periods = getPeriods()) {
     const sorted = periods.slice().sort((a, b) => a.startDate.localeCompare(b.startDate));
     const knownLengths = [];
     for (let i = 1; i < sorted.length; i++) {
       knownLengths.push(DateUtils.daysBetween(sorted[i - 1].startDate, sorted[i].startDate));
     }
-    const avgLength = knownLengths.length
-      ? Math.round(knownLengths.reduce((a, b) => a + b, 0) / knownLengths.length)
-      : 28;
+    const avgLength = estimateCycleLength(knownLengths);
 
     return sorted.map((p, i) => {
       const isLatest = i === sorted.length - 1;
@@ -214,6 +228,6 @@ const PeriodModel = (() => {
   return {
     getPeriods, setPeriods, addPeriod, removePeriod, findPeriodContaining,
     addPeriodTo, removePeriodFrom, findPeriodIn,
-    computeCycles, classifyDate,
+    computeCycles, classifyDate, estimateCycleLength,
   };
 })();
