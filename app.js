@@ -288,7 +288,7 @@ function setLogCellState(dateString, state) {
     }
 }
 
-function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriod = null, predictedPremenstrual = null) {
+function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = [], predictedPremenstruals = []) {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     const monthBlock = document.createElement('div');
@@ -360,12 +360,23 @@ function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriod = nul
             dayCell.appendChild(numWrapper);
         } else {
             // Home View (Original Style)
+
+            // A fixed-size box for the ring + number, kept separate from the
+            // "TODAY" label below so the label always stacks cleanly above
+            // it instead of both being independently centered on the whole
+            // (taller) cell and overlapping.
+            const circle = document.createElement('div');
+            circle.className = 'cal-day-circle';
+
             const numSpan = document.createElement('span');
             numSpan.className = 'cal-day-num';
             numSpan.textContent = day;
 
             const ring = document.createElement('div');
             ring.className = 'cal-day-ring';
+
+            circle.appendChild(ring);
+            circle.appendChild(numSpan);
 
             const isToday = isCurrentMonth && day === today.getDate();
             if (isToday) {
@@ -376,17 +387,16 @@ function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriod = nul
                 dayCell.appendChild(todayLabel);
             }
 
-            dayCell.appendChild(numSpan);
-            dayCell.appendChild(ring);
+            dayCell.appendChild(circle);
 
             const classification = PeriodModel.classifyDate(dateString, cycles);
             if (classification === 'period') {
                 dayCell.classList.add('period', 'period-solid');
             } else if (classification === 'premenstrual') {
                 dayCell.classList.add('premenstrual');
-            } else if (predictedPeriod && dateString >= predictedPeriod.start && dateString <= predictedPeriod.end) {
+            } else if (predictedPeriods.some(p => dateString >= p.start && dateString <= p.end)) {
                 dayCell.classList.add('period-predicted');
-            } else if (predictedPremenstrual && dateString >= predictedPremenstrual.start && dateString <= predictedPremenstrual.end) {
+            } else if (predictedPremenstruals.some(p => dateString >= p.start && dateString <= p.end)) {
                 dayCell.classList.add('premenstrual-predicted');
             }
         }
@@ -896,31 +906,32 @@ function renderCalendar(cycles = PeriodModel.computeCycles()) {
 
     const today = new Date();
 
-    // Same forecast used by the status card / "Next 3 cycles" section
-    // (CycleInsights.getForecast) — reused here, not recomputed, so the
-    // calendar's predicted range always matches what's shown elsewhere.
-    const forecast = cycles.length ? CycleInsights.getForecast(cycles, today, 1) : null;
-    const predictedPeriod = forecast && forecast[0]
-        ? { start: forecast[0].predictedPeriodStartDate, end: forecast[0].predictedPeriodEndDate }
-        : null;
+    // Same forecast used by the "Next 3 cycles" section (CycleInsights
+    // .getForecast's own default count) — reused here, not recomputed, so
+    // the calendar's predicted ranges always match what's shown there.
+    // All 3 forecasted cycles are marked on the calendar, not just the
+    // immediate next one, so the Home view shows the same forecast depth
+    // as the bottom-of-page forecast cards.
+    const forecast = cycles.length ? CycleInsights.getForecast(cycles, today, 3) : null;
+    const predictedPeriods = forecast
+        ? forecast.map(f => ({ start: f.predictedPeriodStartDate, end: f.predictedPeriodEndDate }))
+        : [];
 
-    // The predicted period's own premenstrual lead-in, using the same
+    // Each predicted period's own premenstrual lead-in, using the same
     // window length as PeriodModel.classifyDate() uses for actual logged
     // periods — kept in one place (PeriodModel.PREMENSTRUAL_WINDOW_DAYS) so
     // this never drifts out of sync with a second hardcoded value.
-    const predictedPremenstrual = predictedPeriod
-        ? {
-            start: DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(predictedPeriod.start), -PeriodModel.PREMENSTRUAL_WINDOW_DAYS)),
-            end: DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(predictedPeriod.start), -1)),
-        }
-        : null;
+    const predictedPremenstruals = predictedPeriods.map(p => ({
+        start: DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(p.start), -PeriodModel.PREMENSTRUAL_WINDOW_DAYS)),
+        end: DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(p.start), -1)),
+    }));
 
     // Render past 6 months to future 6 months
     let currentMonthBlock = null;
 
     for (let i = -6; i <= 6; i++) {
         const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false, cycles, predictedPeriod, predictedPremenstrual);
+        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false, cycles, predictedPeriods, predictedPremenstruals);
         scrollArea.appendChild(block);
 
         if (i === 0) currentMonthBlock = block;
