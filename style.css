@@ -312,14 +312,17 @@ body {
     color: white;
 }
 
-/* Predicted next period (forecast, not yet logged) — hollow dashed ring,
-   deliberately distinct from the solid-filled actual-period style above. */
+/* Predicted next period (forecast, not yet logged) — hollow dashed ring in
+   the brighter --primary-light (vs. --primary-color-contrast for an actual
+   period), deliberately lighter/more vivid than the solid-filled
+   actual-period style above, so "this hasn't happened yet" reads as a
+   brighter, airier version of "this did happen." */
 .cal-day.period-predicted {
-    color: var(--primary-color);
+    color: var(--primary-light);
     font-weight: 600;
 }
 .cal-day.period-predicted .cal-day-ring {
-    border-color: var(--primary-color);
+    border-color: var(--primary-light);
     border-style: dashed;
     background-color: transparent;
 }
@@ -340,6 +343,46 @@ body {
 }
 .cal-day.premenstrual-predicted .cal-day-ring {
     border-color: #C2790C;
+    border-style: dashed;
+    background-color: transparent;
+}
+
+/* Fertile window / ovulation day — same hues as the History page's legend
+   dots (.dot.fertile/.dot.ovulation, style.css ~820) so a phase always
+   reads as the same color everywhere in the app. Ovulation is a single
+   day, so it gets the more prominent solid-fill treatment (like an actual
+   period); fertile is a multi-day window, so it gets the lighter dashed
+   treatment (like premenstrual). #00695C is a darker, AA-contrast-safe
+   teal used only where text sits directly on a teal background/on white
+   — the same role --primary-color-contrast plays for pink — the dot's own
+   #009688/#8FD8D8 stay reserved for decorative ring borders. */
+.cal-day.fertile,
+.cal-day.fertile-predicted,
+.cal-day.ovulation-predicted {
+    color: #00695C;
+    font-weight: 600;
+}
+.cal-day.fertile .cal-day-ring {
+    border-color: #8FD8D8;
+    border-style: dashed;
+    background-color: #E6F7F6;
+}
+.cal-day.fertile-predicted .cal-day-ring {
+    border-color: #8FD8D8;
+    border-style: dashed;
+    background-color: transparent;
+}
+.cal-day.ovulation {
+    color: white;
+    font-weight: 700;
+}
+.cal-day.ovulation .cal-day-ring {
+    background-color: #00695C;
+    border-color: #00695C;
+    border-style: solid;
+}
+.cal-day.ovulation-predicted .cal-day-ring {
+    border-color: #009688;
     border-style: dashed;
     background-color: transparent;
 }

@@ -288,7 +288,7 @@ function setLogCellState(dateString, state) {
     }
 }
 
-function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = [], predictedPremenstruals = []) {
+function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = [], predictedPremenstruals = [], predictedOvulationDates = [], predictedFertileWindows = []) {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     const monthBlock = document.createElement('div');
@@ -389,15 +389,29 @@ function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = []
 
             dayCell.appendChild(circle);
 
+            // 'period'/'premenstrual'/'fertile'/'ovulation' here always come
+            // from an actual logged cycle (classifyDate also covers the
+            // latest cycle's own fertile/ovulation estimate, since that IS
+            // forecast cycle 1 — see renderCalendar()'s comment). The
+            // predicted-* branches below cover forecast cycles that have no
+            // logged period of their own yet (typically cycles 2 and 3).
             const classification = PeriodModel.classifyDate(dateString, cycles);
             if (classification === 'period') {
                 dayCell.classList.add('period', 'period-solid');
             } else if (classification === 'premenstrual') {
                 dayCell.classList.add('premenstrual');
+            } else if (classification === 'ovulation') {
+                dayCell.classList.add('ovulation');
+            } else if (classification === 'fertile') {
+                dayCell.classList.add('fertile');
             } else if (predictedPeriods.some(p => dateString >= p.start && dateString <= p.end)) {
                 dayCell.classList.add('period-predicted');
             } else if (predictedPremenstruals.some(p => dateString >= p.start && dateString <= p.end)) {
                 dayCell.classList.add('premenstrual-predicted');
+            } else if (predictedOvulationDates.includes(dateString)) {
+                dayCell.classList.add('ovulation-predicted');
+            } else if (predictedFertileWindows.some(w => dateString >= w.start && dateString <= w.end)) {
+                dayCell.classList.add('fertile-predicted');
             }
         }
 
@@ -926,12 +940,26 @@ function renderCalendar(cycles = PeriodModel.computeCycles()) {
         end: DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(p.start), -1)),
     }));
 
+    // Forecast cycle 1's ovulation/fertile window is already covered by
+    // classifyDate() (it's computed as part of the latest logged cycle in
+    // computeCycles(), using the exact same estimate getForecast() reuses
+    // for cycle 1 — see getForecast()'s own comment). These arrays exist so
+    // cycles 2 and 3 (which have no logged period yet) get the same
+    // markers; harmless overlap with cycle 1 is fine since classifyDate's
+    // result always takes priority in generateMonthGrid().
+    const predictedOvulationDates = forecast
+        ? forecast.map(f => f.ovulationDate).filter(Boolean)
+        : [];
+    const predictedFertileWindows = forecast
+        ? forecast.map(f => f.fertileWindow).filter(Boolean)
+        : [];
+
     // Render past 6 months to future 6 months
     let currentMonthBlock = null;
 
     for (let i = -6; i <= 6; i++) {
         const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false, cycles, predictedPeriods, predictedPremenstruals);
+        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false, cycles, predictedPeriods, predictedPremenstruals, predictedOvulationDates, predictedFertileWindows);
         scrollArea.appendChild(block);
 
         if (i === 0) currentMonthBlock = block;
