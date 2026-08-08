@@ -486,6 +486,150 @@ body {
     margin: 16px 0;
 }
 
+.stat-badge.confidence-medium {
+    color: #B45309;
+    background-color: #FFF6E5;
+}
+
+.stat-badge.confidence-low {
+    color: var(--text-muted);
+    background-color: var(--border-color);
+}
+
+/* Today's Status — cycle phase progress bar */
+.status-phase-progress {
+    margin-top: 8px;
+}
+
+.status-phase-progress-track {
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--border-color);
+    overflow: hidden;
+}
+
+.status-phase-progress-fill {
+    height: 100%;
+    background-color: var(--primary-color);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.status-icon.phase-follicular {
+    background-color: #E8F8F0;
+    color: #196F3D;
+}
+
+.status-icon.phase-ovulation {
+    background-color: #E0F2F1;
+    color: #00BCD4;
+}
+
+.status-icon.phase-luteal {
+    background-color: #F1EBFA;
+    color: #8E5FD1;
+}
+
+/* Forecast Section */
+.forecast-section {
+    margin-bottom: 24px;
+}
+
+.forecast-section h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.forecast-scroll {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+}
+
+.forecast-card {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    min-width: 168px;
+    background-color: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.forecast-card-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.forecast-card-date {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.forecast-card-length {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.forecast-empty-message {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 20px 12px;
+    width: 100%;
+}
+
+/* Insights Section */
+.insights-section {
+    margin-bottom: 24px;
+}
+
+.insights-section h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.insight-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.insight-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.icon-positive {
+    background-color: #E8F8F0;
+    color: #196F3D;
+}
+
+.icon-neutral {
+    background-color: var(--border-color);
+    color: var(--text-muted);
+}
+
+.icon-anomaly {
+    background-color: #FFF6E5;
+    color: #B45309;
+}
+
+.icon-anomaly.severity-high {
+    background-color: #FDEDEC;
+    color: #E74C3C;
+}
+
 /* Logging View specific (Bottom Sheet) */
 #view-logging {
     top: auto;

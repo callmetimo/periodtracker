@@ -38,12 +38,19 @@
                     <!-- Status/Condition Section -->
                     <div class="status-section">
                         <div class="status-card">
-                            <div class="status-icon">
-                                <span class="material-icons-outlined" aria-hidden="true">water_drop</span>
+                            <div class="status-icon" id="status-icon-circle">
+                                <span class="material-icons-outlined" id="status-icon-glyph" aria-hidden="true">water_drop</span>
                             </div>
                             <div class="status-text">
                                 <h2 id="daily-status-title">Period likely to start</h2>
                                 <p id="daily-status-desc">Based on your past cycles</p>
+                                <div class="status-phase-progress" id="status-phase-progress" hidden>
+                                    <div class="status-phase-progress-track" id="status-phase-progress-track"
+                                         role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+                                         aria-label="Cycle phase progress">
+                                        <div class="status-phase-progress-fill" id="status-phase-progress-fill"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -71,6 +78,22 @@
                                     <span class="material-icons-outlined" aria-hidden="true">check_circle</span> NORMAL
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Forecast Section -->
+                    <div class="forecast-section" id="forecast-section">
+                        <h2>Next 3 cycles</h2>
+                        <div class="forecast-scroll" id="forecast-scroll" role="list" aria-label="Forecasted upcoming cycles">
+                            <!-- JS populates .forecast-card items, or the empty-state message -->
+                        </div>
+                    </div>
+
+                    <!-- Insights Section -->
+                    <div class="insights-section" id="insights-section" hidden>
+                        <h2>Insights</h2>
+                        <div class="detail-card insights-card" id="insights-list">
+                            <!-- JS populates .insight-row items -->
                         </div>
                     </div>
                 </div>
@@ -233,6 +256,7 @@
     <script src="config.js"></script>
     <script src="date-utils.js"></script>
     <script src="period-model.js"></script>
+    <script src="insights-model.js"></script>
     <script src="sheets-client.js"></script>
     <script src="data-store.js"></script>
     <script src="auth.js"></script>

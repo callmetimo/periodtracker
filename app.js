@@ -8,7 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initHistoryView();
     initYearView();
-    refreshHomeView();
+    const initialCycles = PeriodModel.computeCycles();
+    refreshHomeView(initialCycles);
+    refreshCycleInsights(initialCycles);
     initToggles();
     if (typeof Auth !== 'undefined') {
         Auth.start();
@@ -36,7 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 await DataStore.syncReconcile();
                 // Reconcile may have pulled in periods that only existed in the
                 // cloud (e.g. logged on another device) — refresh everything.
-                refreshHomeView();
+                const syncedCycles = PeriodModel.computeCycles();
+                refreshHomeView(syncedCycles);
+                refreshCycleInsights(syncedCycles);
                 const activeFilterPill = document.querySelector('.history-filters .pill.active');
                 if (activeFilterPill) activeFilterPill.click(); else renderHistoryList('all');
                 initYearView();
@@ -178,7 +182,9 @@ function initNavigation() {
             stagedPeriods = null;
         }
         document.getElementById('view-logging').classList.remove('active');
-        refreshHomeView();
+        let saveCycles = PeriodModel.computeCycles();
+        refreshHomeView(saveCycles);
+        refreshCycleInsights(saveCycles);
         const activeFilterPill = document.querySelector('.history-filters .pill.active');
         if (activeFilterPill) activeFilterPill.click(); else renderHistoryList('all');
         initYearView();
@@ -189,7 +195,9 @@ function initNavigation() {
                 await DataStore.syncReconcile();
                 // Reconcile may have merged in cloud-only periods (e.g. logged on
                 // another device) — refresh once more to reflect the true merged state.
-                refreshHomeView();
+                saveCycles = PeriodModel.computeCycles();
+                refreshHomeView(saveCycles);
+                refreshCycleInsights(saveCycles);
                 const filterPill = document.querySelector('.history-filters .pill.active');
                 if (filterPill) filterPill.click(); else renderHistoryList('all');
                 initYearView();
@@ -672,10 +680,198 @@ function initCalendar() {
 
 // Recomputes cycles once and re-renders every Home-view piece that depends
 // on them (calendar + stat cards + status), so they can never drift apart.
-function refreshHomeView() {
-    const cycles = PeriodModel.computeCycles();
+// Accepts an optional precomputed `cycles` array so call sites that already
+// have one (e.g. because they also call refreshCycleInsights with it) don't
+// recompute it a second time.
+function refreshHomeView(cycles = PeriodModel.computeCycles()) {
     renderCalendar(cycles);
     updateHomeStats(cycles);
+}
+
+// ── Cycle Insights (phase / forecast / anomalies / insights) ────────────
+// Sibling to refreshHomeView() — takes the SAME precomputed `cycles` array
+// so the two can never show mismatched data, and is wired into the exact
+// same call sites (see app.js's DOMContentLoaded, Sync Now, and log-save
+// handlers). CycleInsights.analyze() is stateless/pure; nothing here is
+// cached beyond the current render pass.
+function refreshCycleInsights(cycles) {
+    if (typeof CycleInsights === 'undefined') return; // defensive — module not loaded
+    const analysis = CycleInsights.analyze(cycles, new Date());
+    updateCyclePhaseStatus(analysis);
+    renderForecastSection(analysis, cycles);
+    renderInsightsList(analysis);
+}
+
+const PHASE_LABELS = { follicular: 'Follicular phase', ovulation: 'Ovulation window', luteal: 'Luteal phase' };
+const PHASE_ICONS = { follicular: 'eco', ovulation: 'bubble_chart', luteal: 'brightness_2' };
+
+// Sibling to updateHomeStats(cycles) — never touches its own baseline copy
+// except by deliberately overriding it for the three non-bleeding phases.
+// Must run AFTER updateHomeStats() so its fallback text is in place first,
+// and always resets its own DOM state (icon class, progress bar hidden-ness)
+// since it runs repeatedly on the same page across re-renders.
+function updateCyclePhaseStatus(analysis) {
+    const wrap = document.getElementById('status-phase-progress');
+    const track = document.getElementById('status-phase-progress-track');
+    const fill = document.getElementById('status-phase-progress-fill');
+    const iconCircle = document.getElementById('status-icon-circle');
+    const iconGlyph = document.getElementById('status-icon-glyph');
+    if (!wrap || !track || !fill || !iconCircle || !iconGlyph || !analysis) return;
+
+    const phase = analysis.phase;
+
+    // No usable phase data, OR currently bleeding: leave updateHomeStats()'s
+    // "Period in progress / Day N" copy completely alone — just reset our
+    // own bits back to their default state.
+    if (!phase || phase.phase === 'menstruation') {
+        wrap.hidden = true;
+        iconCircle.className = 'status-icon';
+        iconGlyph.textContent = 'water_drop';
+        return;
+    }
+
+    const label = PHASE_LABELS[phase.phase];
+    if (!label) { wrap.hidden = true; return; } // unknown phase name — fail safe, don't guess
+
+    document.getElementById('daily-status-title').textContent = label;
+
+    let desc = `Day ${phase.dayOfCycle} of your cycle`;
+    if (phase.phase === 'luteal' && analysis.forecast && analysis.forecast[0]) {
+        const daysUntil = DateUtils.daysBetween(analysis.asOfDate, analysis.forecast[0].predictedStartDate);
+        if (daysUntil >= 0) {
+            desc += daysUntil === 0 ? ' · period likely today' : ` · period likely in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+        }
+    }
+    document.getElementById('daily-status-desc').textContent = desc;
+
+    wrap.hidden = false;
+    const pct = Math.max(0, Math.min(100, phase.phaseProgressPercent));
+    fill.style.width = pct + '%';
+    track.setAttribute('aria-valuenow', String(Math.round(pct)));
+    track.setAttribute('aria-label', `${label} progress`);
+
+    iconCircle.className = `status-icon phase-${phase.phase}`;
+    iconGlyph.textContent = PHASE_ICONS[phase.phase] || 'water_drop';
+}
+
+function renderForecastSection(analysis, cycles) {
+    const scroll = document.getElementById('forecast-scroll');
+    if (!scroll || !analysis) return;
+    scroll.innerHTML = '';
+
+    if (!analysis.forecast) {
+        const p = document.createElement('p');
+        p.className = 'forecast-empty-message';
+        p.textContent = cycles.length === 0
+            ? 'Log your first period to unlock forecasting.'
+            : 'Not enough cycle history yet to forecast — keep tracking.';
+        scroll.appendChild(p);
+        return;
+    }
+
+    analysis.forecast.forEach(f => {
+        const card = document.createElement('div');
+        card.className = 'forecast-card';
+        card.setAttribute('role', 'listitem');
+
+        const label = document.createElement('span');
+        label.className = 'forecast-card-label';
+        label.textContent = `Cycle ${f.cycleNumber}`;
+
+        const date = document.createElement('span');
+        date.className = 'forecast-card-date';
+        date.textContent = `${DateUtils.formatDisplayDate(DateUtils.parseISODate(f.predictedStartDate))} – ${DateUtils.formatDisplayDate(DateUtils.parseISODate(f.predictedEndDate))}`;
+
+        const length = document.createElement('span');
+        length.className = 'forecast-card-length';
+        length.textContent = `~${f.predictedLength} days`;
+
+        const badge = document.createElement('span');
+        const badgeClass = f.confidenceLabel === 'high' ? 'normal' : f.confidenceLabel === 'medium' ? 'confidence-medium' : 'confidence-low';
+        badge.className = `stat-badge ${badgeClass}`;
+        badge.textContent = `${f.confidenceLabel.toUpperCase()} CONFIDENCE`;
+
+        card.append(label, date, length, badge);
+        scroll.appendChild(card);
+    });
+}
+
+const INSIGHT_ICON = {
+    positive: { cls: 'icon-positive', glyph: 'check_circle' },
+    info: { cls: 'icon-neutral', glyph: 'info' },
+    warning: { cls: 'icon-anomaly', glyph: 'error_outline' },
+    critical: { cls: 'icon-anomaly severity-high', glyph: 'priority_high' },
+};
+
+function buildInsightRow(iconClass, glyph, message, hint) {
+    const row = document.createElement('div');
+    row.className = 'insight-row';
+
+    const icon = document.createElement('div');
+    icon.className = `insight-icon ${iconClass}`;
+    const span = document.createElement('span');
+    span.className = 'material-icons-outlined';
+    span.setAttribute('aria-hidden', 'true');
+    span.textContent = glyph;
+    icon.appendChild(span);
+
+    const group = document.createElement('div');
+    group.className = 'insight-text-group';
+    const text = document.createElement('div');
+    text.className = 'insight-text';
+    text.textContent = message;
+    group.appendChild(text);
+    if (hint) {
+        const hintEl = document.createElement('div');
+        hintEl.className = 'insight-hint';
+        hintEl.textContent = hint;
+        group.appendChild(hintEl);
+    }
+
+    row.append(icon, group);
+    return row;
+}
+
+function cycleAnomalyMessage(a) {
+    const date = DateUtils.formatDisplayDate(DateUtils.parseISODate(a.startDate));
+    if (a.reasons.includes('range_too_long_possible_gap')) return `Your cycle starting ${date} lasted ${a.cycleLength} days — did you miss logging a period in between?`;
+    if (a.reasons.includes('range_too_short')) return `Your cycle starting ${date} was unusually short (${a.cycleLength} days).`;
+    if (a.reasons.includes('range_long')) return `Your cycle starting ${date} was longer than usual (${a.cycleLength} days).`;
+    return `Your cycle starting ${date} was unusual for you (${a.cycleLength} days).`;
+}
+
+function periodAnomalyMessage(a) {
+    const date = DateUtils.formatDisplayDate(DateUtils.parseISODate(a.startDate));
+    return a.reason === 'too_short'
+        ? `The period logged on ${date} was only ${a.periodDayCount} day(s) — worth double-checking.`
+        : `The period logged on ${date} lasted ${a.periodDayCount} days, longer than typical — worth double-checking.`;
+}
+
+// Anomaly rows are deliberately non-interactive (no role="button", no click
+// handler) — there's no verify/dismiss/edit workflow to hang a tap on. The
+// static hint just points at the existing log-calendar entry point, which
+// is honest about what the app can actually do today.
+function renderInsightsList(analysis) {
+    const section = document.getElementById('insights-section');
+    const list = document.getElementById('insights-list');
+    if (!section || !list || !analysis) return;
+    list.innerHTML = '';
+
+    const rows = [];
+    analysis.insights.forEach(ins => {
+        const meta = INSIGHT_ICON[ins.severity] || INSIGHT_ICON.info;
+        rows.push(buildInsightRow(meta.cls, meta.glyph, ins.message));
+    });
+    analysis.anomalies.cycleAnomalies.forEach(a => {
+        const meta = a.classification === 'outlier' ? INSIGHT_ICON.critical : INSIGHT_ICON.warning;
+        rows.push(buildInsightRow(meta.cls, meta.glyph, cycleAnomalyMessage(a), 'You can review or correct this in your period log if it looks wrong.'));
+    });
+    analysis.anomalies.periodLengthAnomalies.forEach(a => {
+        rows.push(buildInsightRow(INSIGHT_ICON.warning.cls, INSIGHT_ICON.warning.glyph, periodAnomalyMessage(a), 'You can review or correct this in your period log if it looks wrong.'));
+    });
+
+    section.hidden = rows.length === 0;
+    rows.forEach(r => list.appendChild(r));
 }
 
 function renderCalendar(cycles = PeriodModel.computeCycles()) {
