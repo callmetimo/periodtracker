@@ -312,27 +312,26 @@ body {
     color: white;
 }
 
-/* Predicted next period (forecast, not yet logged) — hollow dashed ring in
-   the brighter --primary-light (vs. --primary-color-contrast for an actual
-   period), deliberately lighter/more vivid than the solid-filled
-   actual-period style above, so "this hasn't happened yet" reads as a
-   brighter, airier version of "this did happen." */
+/* Predicted next period (forecast, not yet logged) — amber/orange, swapped
+   with premenstrual-predicted below at the user's request so the two
+   future-month markers read distinctly from each other on the calendar. */
 .cal-day.period-predicted {
-    color: var(--primary-light);
+    color: #92400E; /* accessible amber on white (~5.7:1) */
     font-weight: 600;
 }
 .cal-day.period-predicted .cal-day-ring {
-    border-color: var(--primary-light);
+    border-color: #C2790C;
     border-style: dashed;
     background-color: transparent;
 }
 
 /* Premenstrual window — the few days immediately before a period starts.
-   Amber/orange, distinct from the pink period/period-predicted palette and
-   the teal fertile/ovulation dots (style.css ~780, ~910), so it reads as
-   its own category rather than a lighter period or a fertile day. */
-.cal-day.premenstrual,
-.cal-day.premenstrual-predicted {
+   Amber/orange for the ACTUAL window (distinct from the pink
+   period/period-solid palette and the teal fertile/ovulation dots,
+   style.css ~780, ~910). The PREDICTED window uses the brighter
+   --primary-light instead — swapped with period-predicted above at the
+   user's request. */
+.cal-day.premenstrual {
     color: #92400E; /* accessible amber on white (~5.7:1) */
     font-weight: 600;
 }
@@ -341,8 +340,12 @@ body {
     border-style: dashed;
     background-color: #FFF3E0;
 }
+.cal-day.premenstrual-predicted {
+    color: var(--primary-light);
+    font-weight: 600;
+}
 .cal-day.premenstrual-predicted .cal-day-ring {
-    border-color: #C2790C;
+    border-color: var(--primary-light);
     border-style: dashed;
     background-color: transparent;
 }
