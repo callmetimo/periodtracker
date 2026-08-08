@@ -266,17 +266,6 @@ body {
     font-weight: 700;
 }
 
-/* Original home view today dot */
-.cal-day:not(.log-mode-cell).today::before {
-    content: '';
-    position: absolute;
-    bottom: 2px;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background-color: var(--text-main);
-}
-
 .cal-day-ring {
     position: absolute;
     width: 36px;
@@ -308,6 +297,38 @@ body {
     color: white;
 }
 
+/* Predicted next period (forecast, not yet logged) — hollow dashed ring,
+   deliberately distinct from the solid-filled actual-period style above. */
+.cal-day.period-predicted {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+.cal-day.period-predicted .cal-day-ring {
+    border-color: var(--primary-color);
+    border-style: dashed;
+    background-color: transparent;
+}
+
+/* Premenstrual window — the few days immediately before a period starts.
+   Amber/orange, distinct from the pink period/period-predicted palette and
+   the teal fertile/ovulation dots (style.css ~780, ~910), so it reads as
+   its own category rather than a lighter period or a fertile day. */
+.cal-day.premenstrual,
+.cal-day.premenstrual-predicted {
+    color: #92400E; /* accessible amber on white (~5.7:1) */
+    font-weight: 600;
+}
+.cal-day.premenstrual .cal-day-ring {
+    border-color: #92400E;
+    border-style: dashed;
+    background-color: #FFF3E0;
+}
+.cal-day.premenstrual-predicted .cal-day-ring {
+    border-color: #C2790C;
+    border-style: dashed;
+    background-color: transparent;
+}
+
 /* Logging View Styles (Flo Match) */
 .cal-day.log-mode-cell {
     justify-content: flex-end;
@@ -325,6 +346,14 @@ body {
     font-weight: 800;
     color: #000;
     margin-bottom: 2px;
+}
+
+/* Home-view cells are 48px tall (vs. log-mode's 70px) — shrink the label
+   so it doesn't crowd the day number. */
+.cal-day:not(.log-mode-cell) .cal-day-today-label {
+    font-size: 7px;
+    margin-bottom: 0;
+    line-height: 1;
 }
 
 .cal-day-num-wrapper {

@@ -16,6 +16,12 @@ const PeriodModel = (() => {
   const LS_HISTORY_LEGACY = 'periodTrackerHistory';
   const LS_LOGGED_LEGACY = 'periodTrackerLoggedDates';
 
+  // Days immediately before a period's start date flagged as "premenstrual"
+  // in classifyDate(). Exported so callers deriving the same window for a
+  // *predicted* (not-yet-logged) period reuse this value instead of a second
+  // hardcoded copy.
+  const PREMENSTRUAL_WINDOW_DAYS = 3;
+
   function periodEnd(period) {
     return DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(period.startDate), period.periodDayCount - 1));
   }
@@ -212,15 +218,26 @@ const PeriodModel = (() => {
     });
   }
 
-  // 'period' | 'fertile' | 'ovulation' | null for one date. Pass a
-  // precomputed `cycles` array when classifying many dates in a loop (e.g.
-  // rendering a whole calendar month) to avoid recomputing on every call.
+  // 'period' | 'fertile' | 'ovulation' | 'premenstrual' | null for one date.
+  // Pass a precomputed `cycles` array when classifying many dates in a loop
+  // (e.g. rendering a whole calendar month) to avoid recomputing on every
+  // call.
   function classifyDate(dateStr, cycles = computeCycles()) {
     for (const c of cycles) {
       if (dateStr >= c.startDate && dateStr <= c.periodEndDate) return 'period';
       if (c.fertileWindow && dateStr >= c.fertileWindow.start && dateStr <= c.fertileWindow.end) {
         return dateStr === c.ovulationDate ? 'ovulation' : 'fertile';
       }
+    }
+    // Second pass so 'period'/'fertile'/'ovulation' always take priority
+    // over a premenstrual window that happens to overlap them on a short
+    // cycle (a date is only ever "premenstrual" once every actual period
+    // has had first claim on it).
+    for (const c of cycles) {
+      const premenstrualStart = DateUtils.toISODate(
+        DateUtils.addDays(DateUtils.parseISODate(c.startDate), -PREMENSTRUAL_WINDOW_DAYS)
+      );
+      if (dateStr >= premenstrualStart && dateStr < c.startDate) return 'premenstrual';
     }
     return null;
   }
@@ -229,5 +246,6 @@ const PeriodModel = (() => {
     getPeriods, setPeriods, addPeriod, removePeriod, findPeriodContaining,
     addPeriodTo, removePeriodFrom, findPeriodIn,
     computeCycles, classifyDate, estimateCycleLength,
+    PREMENSTRUAL_WINDOW_DAYS,
   };
 })();

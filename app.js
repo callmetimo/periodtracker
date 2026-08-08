@@ -288,7 +288,7 @@ function setLogCellState(dateString, state) {
     }
 }
 
-function generateMonthGrid(year, month, isLogMode, cycles) {
+function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriod = null, predictedPremenstrual = null) {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     const monthBlock = document.createElement('div');
@@ -360,19 +360,34 @@ function generateMonthGrid(year, month, isLogMode, cycles) {
             dayCell.appendChild(numWrapper);
         } else {
             // Home View (Original Style)
-            dayCell.textContent = day;
+            const numSpan = document.createElement('span');
+            numSpan.className = 'cal-day-num';
+            numSpan.textContent = day;
 
             const ring = document.createElement('div');
             ring.className = 'cal-day-ring';
-            dayCell.appendChild(ring);
 
             const isToday = isCurrentMonth && day === today.getDate();
             if (isToday) {
                 dayCell.classList.add('today');
+                const todayLabel = document.createElement('div');
+                todayLabel.className = 'cal-day-today-label';
+                todayLabel.textContent = 'TODAY';
+                dayCell.appendChild(todayLabel);
             }
 
-            if (PeriodModel.classifyDate(dateString, cycles) === 'period') {
+            dayCell.appendChild(numSpan);
+            dayCell.appendChild(ring);
+
+            const classification = PeriodModel.classifyDate(dateString, cycles);
+            if (classification === 'period') {
                 dayCell.classList.add('period', 'period-solid');
+            } else if (classification === 'premenstrual') {
+                dayCell.classList.add('premenstrual');
+            } else if (predictedPeriod && dateString >= predictedPeriod.start && dateString <= predictedPeriod.end) {
+                dayCell.classList.add('period-predicted');
+            } else if (predictedPremenstrual && dateString >= predictedPremenstrual.start && dateString <= predictedPremenstrual.end) {
+                dayCell.classList.add('premenstrual-predicted');
             }
         }
 
@@ -880,12 +895,32 @@ function renderCalendar(cycles = PeriodModel.computeCycles()) {
     scrollArea.innerHTML = '';
 
     const today = new Date();
+
+    // Same forecast used by the status card / "Next 3 cycles" section
+    // (CycleInsights.getForecast) — reused here, not recomputed, so the
+    // calendar's predicted range always matches what's shown elsewhere.
+    const forecast = cycles.length ? CycleInsights.getForecast(cycles, today, 1) : null;
+    const predictedPeriod = forecast && forecast[0]
+        ? { start: forecast[0].predictedPeriodStartDate, end: forecast[0].predictedPeriodEndDate }
+        : null;
+
+    // The predicted period's own premenstrual lead-in, using the same
+    // window length as PeriodModel.classifyDate() uses for actual logged
+    // periods — kept in one place (PeriodModel.PREMENSTRUAL_WINDOW_DAYS) so
+    // this never drifts out of sync with a second hardcoded value.
+    const predictedPremenstrual = predictedPeriod
+        ? {
+            start: DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(predictedPeriod.start), -PeriodModel.PREMENSTRUAL_WINDOW_DAYS)),
+            end: DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(predictedPeriod.start), -1)),
+        }
+        : null;
+
     // Render past 6 months to future 6 months
     let currentMonthBlock = null;
 
     for (let i = -6; i <= 6; i++) {
         const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false, cycles);
+        const block = generateMonthGrid(d.getFullYear(), d.getMonth(), false, cycles, predictedPeriod, predictedPremenstrual);
         scrollArea.appendChild(block);
 
         if (i === 0) currentMonthBlock = block;
