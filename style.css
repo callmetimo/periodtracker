@@ -388,29 +388,28 @@ body {
 /* "Selected" day marker (Home view only — log-mode cells never receive this
    class, see setSelectedDate()'s #calendar-scroll-area scoping in app.js).
    A single consistent grey halo behind the circle, the same on every date
-   regardless of phase — deliberately does NOT touch .cal-day-ring/.cal-day-num
-   at all, so each phase's own at-a-glance color/ring styling stays exactly as
-   it always looks; the halo is just a bigger, lower-stacked disc sitting
-   behind it. This keeps the "which date did I tap" signal consistent no
-   matter what phase that date is in (unlike swapping each phase's own ring
-   style, which made "selected" blend into that phase's already-dashed/light
-   look). Sized bigger than the 36px ring via a fixed 44px box, not a
-   transform-scale, so it can be safely bigger than its parent without any
-   layout side effects: it's absolutely centered within .cal-day-circle
-   (already position:relative) and stacked behind the ring (z-index -2, one
-   below the ring's own -1), so it never affects the grid's row height or
-   overlaps into a neighboring cell's own content.
-   Today is intentionally excluded — it already has its own unambiguous
-   solid marker + "TODAY" label, so it keeps that exact look unchanged
-   whether or not it's also the selected date, rather than layering a halo
-   on top of it. */
-.cal-day.selected:not(.today) .cal-day-circle::before {
+   regardless of phase (today included) — deliberately does NOT touch
+   .cal-day-ring/.cal-day-num at all, so each phase's own at-a-glance
+   color/ring styling stays exactly as it always looks; the halo is just a
+   bigger, lower-stacked disc sitting behind it. This keeps the "which date
+   did I tap" signal consistent no matter what phase that date is in (unlike
+   swapping each phase's own ring style, which made "selected" blend into
+   that phase's already-dashed/light look). Sized 30% bigger than the 36px
+   ring (46.8px) via a fixed box, not a transform-scale, so it can be safely
+   bigger than its parent without any layout side effects: it's absolutely
+   centered within .cal-day-circle (already position:relative) and stacked
+   behind the ring (z-index -2, one below the ring's own -1), so it never
+   affects the grid's row height or overlaps into a neighboring cell's own
+   content. Today's "TODAY" label gets extra clearance above the circle (see
+   .cal-day-today-label below) specifically so this bigger halo has room to
+   sit behind today's circle too without the two overlapping. */
+.cal-day.selected .cal-day-circle::before {
     content: '';
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 44px;
-    height: 44px;
+    width: 46.8px;
+    height: 46.8px;
     border-radius: 50%;
     background-color: #D9D9D9;
     transform: translate(-50%, -50%);
@@ -443,13 +442,18 @@ body {
    app.js) and pinned to the circle's own top edge via `bottom: 100%`, so it
    adds no flex-flow height of its own. Without this, the label used to sit
    in normal flow above the circle, making today's circle center lower than
-   every other (label-less) cell in the same calendar row. */
+   every other (label-less) cell in the same calendar row.
+   margin-bottom is 8px (not just a small visual gap) specifically so the
+   label clears the 46.8px selected-marker halo (see .cal-day.selected
+   .cal-day-circle::before above), which pokes 5.4px above the circle's own
+   top edge when today is also the selected date — without this extra
+   clearance the two would overlap. */
 .cal-day:not(.log-mode-cell) .cal-day-today-label {
     position: absolute;
     bottom: 100%;
     left: 50%;
     transform: translateX(-50%);
-    margin-bottom: 2px;
+    margin-bottom: 8px;
     font-size: 7px;
     font-weight: 700;
     letter-spacing: 0.4px;
