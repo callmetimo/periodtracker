@@ -326,23 +326,18 @@ body {
 }
 
 /* Premenstrual window — the few days immediately before a period starts.
-   Amber/orange for the ACTUAL window (distinct from the pink
-   period/period-solid palette and the teal fertile/ovulation dots,
-   style.css ~780, ~910). The PREDICTED window uses the brighter
-   --primary-light instead — swapped with period-predicted above at the
-   user's request. */
-.cal-day.premenstrual {
-    color: #92400E; /* accessible amber on white (~5.7:1) */
-    font-weight: 600;
-}
-.cal-day.premenstrual .cal-day-ring {
-    border-color: #92400E;
-    border-style: dashed;
-    background-color: #FFF3E0;
-}
+   Same brighter --primary-light for both the ACTUAL window (current/past
+   months) and the PREDICTED window (future months), per request, so
+   premenstrual reads as one consistent color everywhere on the calendar. */
+.cal-day.premenstrual,
 .cal-day.premenstrual-predicted {
     color: var(--primary-light);
     font-weight: 600;
+}
+.cal-day.premenstrual .cal-day-ring {
+    border-color: var(--primary-light);
+    border-style: dashed;
+    background-color: #FFF0F3;
 }
 .cal-day.premenstrual-predicted .cal-day-ring {
     border-color: var(--primary-light);
