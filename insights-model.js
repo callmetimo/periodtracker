@@ -246,6 +246,69 @@ const CycleInsights = (() => {
     };
   }
 
+  // ── Arbitrary-date status lookup (getStatusForDate's helpers) ────────
+  // Normalizes a getForecast() entry into the same shape as a real
+  // PeriodModel cycle record, so buildDatedResult() below can treat "governed
+  // by an actual cycle" and "governed by a forecast cycle" uniformly.
+  function forecastToCycleShape(f) {
+    return {
+      startDate: f.predictedStartDate,
+      endDate: f.predictedEndDate,
+      cycleLength: f.predictedLength,
+      periodDayCount: f.predictedPeriodDayCount,
+      ovulationDate: f.ovulationDate,
+      fertileWindow: f.fertileWindow,
+    };
+  }
+
+  // Builds getStatusForDate()'s per-date result once a governing cycle-shaped
+  // object has been found, via the same phaseForDay() used by getCurrentPhase.
+  // clampToLength mirrors getCurrentPhase()'s isLate clamp (only relevant for
+  // the still-open latest cycle, extended through today when overdue).
+  function buildDatedResult(cycleLike, targetIso, isPredicted, forecastCycleNumber, clampToLength) {
+    const L = cycleLike.cycleLength;
+    const P = cycleLike.periodDayCount;
+    let dayOfCycle = DateUtils.daysBetween(cycleLike.startDate, targetIso) + 1;
+    if (clampToLength) dayOfCycle = Math.min(dayOfCycle, L);
+    const p = phaseForDay(dayOfCycle, L, P);
+    const phaseDayNumber = dayOfCycle - p.start + 1;
+    const phaseLengthDays = p.end - p.start + 1;
+    return {
+      dateIso: targetIso,
+      kind: 'dated',
+      isPredicted,
+      phase: p.phase,
+      dayOfCycle,
+      phaseDayNumber,
+      phaseLengthDays,
+      phaseProgressPercent: clamp(round((phaseDayNumber / phaseLengthDays) * 100), 0, 100),
+      cycleStartDate: cycleLike.startDate,
+      cycleEndDate: cycleLike.endDate,
+      cycleLength: L,
+      ovulationDate: cycleLike.ovulationDate,
+      fertileWindow: cycleLike.fertileWindow,
+      forecastCycleNumber, // null unless governed by a forecast[] entry
+    };
+  }
+
+  // Grows getForecast()'s count until the returned array covers targetIso,
+  // then returns that ONE matching entry. Needed because the Home calendar
+  // renders ±6 months, which a 3-cycle forecast can't always cover on a
+  // short cycle. Doubling from a reasonable estimate keeps this cheap.
+  function getForecastCovering(cycles, targetIso, todayDate) {
+    const latest = cycles[cycles.length - 1];
+    const approxLen = Math.max(latest.cycleLength, 15);
+    let count = Math.max(3, Math.ceil(DateUtils.daysBetween(latest.endDate, targetIso) / approxLen) + 2);
+    const MAX_COUNT = 60; // defensive ceiling — should be unreachable for any realistic cycle length
+    while (count <= MAX_COUNT) {
+      const forecast = getForecast(cycles, todayDate, count);
+      const match = forecast.find(f => targetIso >= f.predictedStartDate && targetIso <= f.predictedEndDate);
+      if (match) return match;
+      count *= 2;
+    }
+    return null;
+  }
+
   // ── 3. Current phase ────────────────────────────────────────────────
   function getCurrentPhase(cycles, todayDate) {
     if (!cycles.length) return null;
@@ -381,6 +444,55 @@ const CycleInsights = (() => {
     return forecasts;
   }
 
+  // ── 4b. Arbitrary-date status ───────────────────────────────────────
+  // Date-generalized version of getCurrentPhase() — given ANY target date
+  // (past, present, or future, arbitrarily far in either direction), resolves
+  // which cycle governs it and returns a rich status object. Unlike
+  // getCurrentPhase() (which only ever looks at cycles[cycles.length-1] and
+  // is implicitly "today"), this searches completed cycles, the open/latest
+  // cycle (extended through today if the period is late), and — if needed —
+  // forward into as many forecast cycles as it takes to reach targetDate.
+  // Both `targetDate` and `todayDate` are Date objects, matching
+  // getCurrentPhase()'s own convention (this module never calls `new Date()`
+  // internally — see file header comment).
+  function getStatusForDate(cycles, targetDate, todayDate) {
+    const targetIso = DateUtils.toISODate(targetDate);
+    if (!cycles.length) return { dateIso: targetIso, kind: 'no-data', reason: 'no-cycles' };
+
+    const earliest = cycles[0];
+    if (targetIso < earliest.startDate) return { dateIso: targetIso, kind: 'no-data', reason: 'before-earliest' };
+
+    const latest = cycles[cycles.length - 1];
+    const todayIso = DateUtils.toISODate(todayDate);
+
+    // 1) Any completed (non-latest) cycle containing targetIso — these are
+    // gap-free and contiguous by construction (PeriodModel.computeCycles()'s
+    // endDate = day before the next period), so any date from
+    // earliest.startDate up to (not including) latest.startDate is
+    // guaranteed to match exactly one.
+    for (let i = 0; i < cycles.length - 1; i++) {
+      const c = cycles[i];
+      if (targetIso >= c.startDate && targetIso <= c.endDate) {
+        return buildDatedResult(c, targetIso, false, null, false);
+      }
+    }
+
+    // 2) The open/latest cycle's own range, extended through today if the
+    // period is already overdue (no new period has started, so the cycle
+    // conceptually still owns every day through today, not just its nominal
+    // estimated end).
+    const effectiveLatestEnd = latest.endDate > todayIso ? latest.endDate : todayIso;
+    if (targetIso >= latest.startDate && targetIso <= effectiveLatestEnd) {
+      const isPredicted = targetIso > todayIso;
+      return buildDatedResult(latest, targetIso, isPredicted, null, true);
+    }
+
+    // 3) Beyond that: genuine forecast-cycle territory.
+    const forecast = getForecastCovering(cycles, targetIso, todayDate);
+    if (!forecast) return { dateIso: targetIso, kind: 'no-data', reason: 'before-earliest' }; // defensive, should be unreachable
+    return buildDatedResult(forecastToCycleShape(forecast), targetIso, true, forecast.cycleNumber, false);
+  }
+
   // ── 5. Insights ─────────────────────────────────────────────────────
   function getInsights(cycles, todayDate, precomputed) {
     const stats = (precomputed && precomputed.stats) || getStatistics(cycles);
@@ -501,6 +613,7 @@ const CycleInsights = (() => {
     detectAnomalies,
     getCurrentPhase,
     getForecast,
+    getStatusForDate,
     getInsights,
     analyze,
     backtest,

@@ -385,6 +385,76 @@ body {
     background-color: transparent;
 }
 
+/* "Selected" day marker (Home view only — log-mode cells never receive this
+   class, see setSelectedDate()'s #calendar-scroll-area scoping in app.js).
+   Flo-style swap: reuses each phase's own accent color but renders it as a
+   solid outlined/bordered ring instead of that phase's normal solid-fill or
+   dashed-fill treatment, rather than stacking a second ring on top. */
+.cal-day.selected .cal-day-ring {
+    border-style: solid;
+    border-color: var(--text-main);
+    background-color: transparent;
+}
+
+.cal-day.period.period-solid.selected .cal-day-ring {
+    border-style: solid;
+    border-color: var(--primary-color-contrast);
+    background-color: transparent;
+}
+.cal-day.period.period-solid.selected {
+    color: var(--primary-color-contrast);
+}
+
+.cal-day.period-predicted.selected .cal-day-ring {
+    border-style: solid;
+    border-color: #C2790C;
+    background-color: transparent;
+}
+
+.cal-day.premenstrual.selected .cal-day-ring,
+.cal-day.premenstrual-predicted.selected .cal-day-ring {
+    border-style: solid;
+    border-color: var(--primary-light);
+    background-color: transparent;
+}
+
+.cal-day.fertile.selected .cal-day-ring,
+.cal-day.fertile-predicted.selected .cal-day-ring {
+    border-style: solid;
+    border-color: #8FD8D8;
+    background-color: transparent;
+}
+
+.cal-day.ovulation.selected .cal-day-ring {
+    border-style: solid;
+    border-color: #00695C;
+    background-color: transparent;
+}
+.cal-day.ovulation.selected {
+    color: #00695C;
+}
+
+.cal-day.ovulation-predicted.selected .cal-day-ring {
+    border-style: solid;
+    border-color: #009688;
+    background-color: transparent;
+}
+
+/* Today + selected, no other phase: keep today's own solid look unchanged —
+   it's already maximally prominent, so no additional outline is layered on
+   top (avoids a jarring double marker). When today ALSO carries a phase
+   class (period/fertile/etc.), that phase's own .selected rule above already
+   wins via the same specificity relationship the plain .today rule below
+   already has against those phase rules. */
+.cal-day.today.selected:not(.period):not(.period-predicted):not(.premenstrual):not(.premenstrual-predicted) .cal-day-ring {
+    background-color: var(--text-main);
+    border-color: var(--text-main);
+    border-style: solid;
+}
+.cal-day.today.selected:not(.period):not(.period-predicted):not(.premenstrual):not(.premenstrual-predicted) {
+    color: #FFFFFF;
+}
+
 /* Logging View Styles (Flo Match) */
 .cal-day.log-mode-cell {
     justify-content: flex-end;
@@ -529,6 +599,28 @@ body {
 .status-text p {
     font-size: 0.85rem;
     color: var(--text-muted);
+}
+
+.status-eyebrow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.status-pregnancy-chance {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.status-pregnancy-chance-icon {
+    font-size: 15px;
 }
 
 /* My Cycles Section */

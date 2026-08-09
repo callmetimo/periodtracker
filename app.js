@@ -244,6 +244,17 @@ let logCurrentDate = new Date();
 // persisted PeriodModel state directly).
 let stagedPeriods = null;
 
+// The Home calendar's currently "selected" date (ISO string), whose status
+// the card below the calendar shows. null = no tap yet this session — the
+// status card is driven entirely by updateHomeStats()/updateCyclePhaseStatus()
+// exactly as before this feature existed, so initial load has zero behavior
+// change. Once set (by tapping ANY Home-view day cell, including today's own
+// cell), every subsequent status-card render uses updateStatusCardForDate()
+// instead — this is a deliberate, one-way transition for the rest of the
+// session (see updateStatusCardForDate's own handling of "today" for why
+// re-tapping today still reads identically to the untouched default).
+let selectedDateIso = null;
+
 // Shared by both the click and keydown (Enter/Space) handlers on a log-mode
 // calendar day cell, so keyboard users get the identical toggle behavior.
 // Clears/adds the whole real contiguous period the tapped date belongs to
@@ -267,6 +278,41 @@ function handleLogDayActivate(dateString) {
             setLogCellState(DateUtils.toISODate(DateUtils.addDays(start, i)), i === 0 ? 'start' : 'continuation');
         }
     }
+}
+
+// Fires on click/keydown activation of a Home-view (non-log-mode) day cell —
+// mirrors handleLogDayActivate's role, but drives the selected-date status
+// card instead of toggling a logged period. Recomputes cycles fresh (cheap;
+// avoids any staleness if periods changed since the calendar was rendered).
+function handleHomeDayActivate(dateString) {
+    setSelectedDate(dateString, PeriodModel.computeCycles());
+}
+
+// Moves the "selected" marker and refreshes the status card WITHOUT calling
+// renderCalendar() — renderCalendar() resets #calendar-scroll-area's
+// scrollTop to the current month on every call (see its own comment), which
+// would jar the user's scroll position on every single tap. Scoped to
+// #calendar-scroll-area specifically so this never touches the log-calendar
+// sheet's cells (which live under #view-logging and reuse the same
+// data-date attribute convention).
+function setSelectedDate(dateString, cycles = PeriodModel.computeCycles()) {
+    const previousIso = selectedDateIso;
+    selectedDateIso = dateString;
+
+    if (previousIso && previousIso !== dateString) {
+        const prevCell = document.querySelector(`#calendar-scroll-area .cal-day[data-date="${previousIso}"]`);
+        if (prevCell) {
+            prevCell.classList.remove('selected');
+            prevCell.setAttribute('aria-pressed', 'false');
+        }
+    }
+    const nextCell = document.querySelector(`#calendar-scroll-area .cal-day[data-date="${dateString}"]`);
+    if (nextCell) {
+        nextCell.classList.add('selected');
+        nextCell.setAttribute('aria-pressed', 'true');
+    }
+
+    updateStatusCardForDate(dateString, cycles);
 }
 
 // state: 'start' | 'continuation' | null (cleared). Only touches cells
@@ -389,6 +435,10 @@ function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = []
 
             dayCell.appendChild(circle);
 
+            if (selectedDateIso === dateString) {
+                dayCell.classList.add('selected');
+            }
+
             // 'period'/'premenstrual'/'fertile'/'ovulation' here always come
             // from an actual logged cycle (classifyDate also covers the
             // latest cycle's own fertile/ovulation estimate, since that IS
@@ -413,6 +463,24 @@ function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = []
             } else if (predictedFertileWindows.some(w => dateString >= w.start && dateString <= w.end)) {
                 dayCell.classList.add('fertile-predicted');
             }
+
+            // Tappable so any date (past or future) can drive the status
+            // card below the calendar — mirrors the log-mode cell's own
+            // role="button"/keydown pattern, but activates
+            // handleHomeDayActivate() instead of the period-logging toggle.
+            dayCell.setAttribute('role', 'button');
+            dayCell.setAttribute('tabindex', '0');
+            dayCell.setAttribute('aria-label', `${monthNames[month]} ${day}, ${year}`);
+            dayCell.setAttribute('aria-pressed', selectedDateIso === dateString ? 'true' : 'false');
+
+            const activateHomeDay = () => handleHomeDayActivate(dateString);
+            dayCell.addEventListener('click', () => activateHomeDay());
+            dayCell.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                    e.preventDefault();
+                    activateHomeDay();
+                }
+            });
         }
 
         if (isLogMode) {
@@ -724,7 +792,15 @@ function initCalendar() {
 // recompute it a second time.
 function refreshHomeView(cycles = PeriodModel.computeCycles()) {
     renderCalendar(cycles);
-    updateHomeStats(cycles);
+    // renderCalendar() re-reads selectedDateIso while building each cell, so
+    // the .selected marker survives this call unconditionally. The status
+    // card itself, though, must NOT be stomped back to "today" once a date
+    // has been tapped — updateStatusCardForDate() (driven from
+    // refreshCycleInsights, called alongside this at every shared call site)
+    // owns the status card from that point on.
+    if (selectedDateIso === null) {
+        updateHomeStats(cycles);
+    }
 }
 
 // ── Cycle Insights (phase / forecast / anomalies / insights) ────────────
@@ -736,7 +812,11 @@ function refreshHomeView(cycles = PeriodModel.computeCycles()) {
 function refreshCycleInsights(cycles) {
     if (typeof CycleInsights === 'undefined') return; // defensive — module not loaded
     const analysis = CycleInsights.analyze(cycles, new Date());
-    updateCyclePhaseStatus(analysis);
+    if (selectedDateIso === null) {
+        updateCyclePhaseStatus(analysis);
+    } else {
+        updateStatusCardForDate(selectedDateIso, cycles);
+    }
     renderForecastSection(analysis, cycles);
     renderInsightsList(analysis);
 }
@@ -791,6 +871,106 @@ function updateCyclePhaseStatus(analysis) {
 
     iconCircle.className = `status-icon phase-${phase.phase}`;
     iconGlyph.textContent = PHASE_ICONS[phase.phase] || 'water_drop';
+}
+
+const PREGNANCY_CHANCE_TEXT = {
+    higher: 'Higher chance of getting pregnant',
+    lower: 'Lower chance of getting pregnant',
+};
+
+// Sibling to updateHomeStats()+updateCyclePhaseStatus() combined, generalized
+// to an arbitrary date via CycleInsights.getStatusForDate(). Used ONLY once
+// selectedDateIso is non-null (see refreshHomeView/refreshCycleInsights) —
+// the null/"no tap yet" path never calls this, so it carries zero regression
+// risk for the existing today-only behavior.
+//
+// Two cases are deliberately special-cased below to read IDENTICALLY to the
+// untouched updateHomeStats()/updateCyclePhaseStatus() pair when the tapped
+// date happens to be today: the zero-cycles empty state, and "today,
+// currently bleeding" (which would otherwise read "Period day N" instead of
+// "Period in progress"). Every other today-phase case (follicular/ovulation/
+// luteal) already naturally matches, since both paths share the same
+// PHASE_LABELS/desc-format/luteal-suffix logic.
+function updateStatusCardForDate(dateString, cycles) {
+    const titleEl = document.getElementById('daily-status-title');
+    const descEl = document.getElementById('daily-status-desc');
+    const eyebrowEl = document.getElementById('status-prediction-eyebrow');
+    const pregnancyEl = document.getElementById('status-pregnancy-chance');
+    const pregnancyTextEl = document.getElementById('status-pregnancy-chance-text');
+    const wrap = document.getElementById('status-phase-progress');
+    const track = document.getElementById('status-phase-progress-track');
+    const fill = document.getElementById('status-phase-progress-fill');
+    const iconCircle = document.getElementById('status-icon-circle');
+    const iconGlyph = document.getElementById('status-icon-glyph');
+    if (!titleEl || !descEl) return;
+
+    const info = CycleInsights.getStatusForDate(cycles, DateUtils.parseISODate(dateString), new Date());
+
+    if (info.kind === 'no-data') {
+        if (info.reason === 'no-cycles') {
+            // Matches updateHomeStats()'s own empty state exactly.
+            titleEl.textContent = 'Log your first period';
+            descEl.textContent = 'Tap + to get started';
+        } else {
+            titleEl.textContent = 'No data yet';
+            descEl.textContent = 'This is before your first logged period';
+        }
+        if (eyebrowEl) eyebrowEl.hidden = true;
+        if (pregnancyEl) pregnancyEl.hidden = true;
+        if (wrap) wrap.hidden = true;
+        if (iconCircle) iconCircle.className = 'status-icon';
+        if (iconGlyph) iconGlyph.textContent = 'help_outline';
+        return;
+    }
+
+    if (eyebrowEl) eyebrowEl.hidden = !info.isPredicted;
+
+    if (info.phase === 'menstruation') {
+        const isViewingToday = dateString === DateUtils.toISODate(new Date());
+        titleEl.textContent = isViewingToday ? 'Period in progress' : `Period day ${info.dayOfCycle}`;
+        descEl.textContent = `Day ${info.dayOfCycle} of your period`;
+        if (pregnancyEl) pregnancyEl.hidden = true; // never applies to period days
+        if (wrap) wrap.hidden = true;
+        if (iconCircle) iconCircle.className = 'status-icon';
+        if (iconGlyph) iconGlyph.textContent = 'water_drop';
+        return;
+    }
+
+    const label = PHASE_LABELS[info.phase];
+    titleEl.textContent = label;
+
+    let desc = `Day ${info.dayOfCycle} of your cycle`;
+    if (info.phase === 'luteal') {
+        const nextPeriodStart = DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(info.cycleEndDate), 1));
+        const daysUntil = DateUtils.daysBetween(dateString, nextPeriodStart);
+        if (daysUntil >= 0) {
+            desc += daysUntil === 0 ? ' · period likely today' : ` · period likely in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+        }
+    }
+    descEl.textContent = desc;
+
+    if (pregnancyEl) {
+        if (info.isPredicted) {
+            const inFertileWindow = !!info.fertileWindow && dateString >= info.fertileWindow.start && dateString <= info.fertileWindow.end;
+            pregnancyEl.hidden = false;
+            pregnancyTextEl.textContent = PREGNANCY_CHANCE_TEXT[inFertileWindow ? 'higher' : 'lower'];
+        } else {
+            pregnancyEl.hidden = true;
+        }
+    }
+
+    if (wrap && track && fill) {
+        wrap.hidden = false;
+        const pct = Math.max(0, Math.min(100, info.phaseProgressPercent));
+        fill.style.width = pct + '%';
+        track.setAttribute('aria-valuenow', String(Math.round(pct)));
+        track.setAttribute('aria-label', `${label} progress`);
+    }
+
+    if (iconCircle && iconGlyph) {
+        iconCircle.className = `status-icon phase-${info.phase}`;
+        iconGlyph.textContent = PHASE_ICONS[info.phase] || 'water_drop';
+    }
 }
 
 function renderForecastSection(analysis, cycles) {
