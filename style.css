@@ -387,72 +387,34 @@ body {
 
 /* "Selected" day marker (Home view only — log-mode cells never receive this
    class, see setSelectedDate()'s #calendar-scroll-area scoping in app.js).
-   Flo-style swap: reuses each phase's own accent color but renders it as a
-   solid outlined/bordered ring instead of that phase's normal solid-fill or
-   dashed-fill treatment, rather than stacking a second ring on top. */
-.cal-day.selected .cal-day-ring {
-    border-style: solid;
-    border-color: var(--text-main);
-    background-color: transparent;
-}
-
-.cal-day.period.period-solid.selected .cal-day-ring {
-    border-style: solid;
-    border-color: var(--primary-color-contrast);
-    background-color: transparent;
-}
-.cal-day.period.period-solid.selected {
-    color: var(--primary-color-contrast);
-}
-
-.cal-day.period-predicted.selected .cal-day-ring {
-    border-style: solid;
-    border-color: #C2790C;
-    background-color: transparent;
-}
-
-.cal-day.premenstrual.selected .cal-day-ring,
-.cal-day.premenstrual-predicted.selected .cal-day-ring {
-    border-style: solid;
-    border-color: var(--primary-light);
-    background-color: transparent;
-}
-
-.cal-day.fertile.selected .cal-day-ring,
-.cal-day.fertile-predicted.selected .cal-day-ring {
-    border-style: solid;
-    border-color: #8FD8D8;
-    background-color: transparent;
-}
-
-.cal-day.ovulation.selected .cal-day-ring {
-    border-style: solid;
-    border-color: #00695C;
-    background-color: transparent;
-}
-.cal-day.ovulation.selected {
-    color: #00695C;
-}
-
-.cal-day.ovulation-predicted.selected .cal-day-ring {
-    border-style: solid;
-    border-color: #009688;
-    background-color: transparent;
-}
-
-/* Today + selected, no other phase: keep today's own solid look unchanged —
-   it's already maximally prominent, so no additional outline is layered on
-   top (avoids a jarring double marker). When today ALSO carries a phase
-   class (period/fertile/etc.), that phase's own .selected rule above already
-   wins via the same specificity relationship the plain .today rule below
-   already has against those phase rules. */
-.cal-day.today.selected:not(.period):not(.period-predicted):not(.premenstrual):not(.premenstrual-predicted) .cal-day-ring {
-    background-color: var(--text-main);
-    border-color: var(--text-main);
-    border-style: solid;
-}
-.cal-day.today.selected:not(.period):not(.period-predicted):not(.premenstrual):not(.premenstrual-predicted) {
-    color: #FFFFFF;
+   A single consistent grey halo behind the circle, the same on every date
+   regardless of phase — deliberately does NOT touch .cal-day-ring/.cal-day-num
+   at all, so each phase's own at-a-glance color/ring styling stays exactly as
+   it always looks; the halo is just a bigger, lower-stacked disc sitting
+   behind it. This keeps the "which date did I tap" signal consistent no
+   matter what phase that date is in (unlike swapping each phase's own ring
+   style, which made "selected" blend into that phase's already-dashed/light
+   look). Sized bigger than the 36px ring via a fixed 44px box, not a
+   transform-scale, so it can be safely bigger than its parent without any
+   layout side effects: it's absolutely centered within .cal-day-circle
+   (already position:relative) and stacked behind the ring (z-index -2, one
+   below the ring's own -1), so it never affects the grid's row height or
+   overlaps into a neighboring cell's own content.
+   Today is intentionally excluded — it already has its own unambiguous
+   solid marker + "TODAY" label, so it keeps that exact look unchanged
+   whether or not it's also the selected date, rather than layering a halo
+   on top of it. */
+.cal-day.selected:not(.today) .cal-day-circle::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: #D9D9D9;
+    transform: translate(-50%, -50%);
+    z-index: -2;
 }
 
 /* Logging View Styles (Flo Match) */
