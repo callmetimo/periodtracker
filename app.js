@@ -407,10 +407,11 @@ function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = []
         } else {
             // Home View (Original Style)
 
-            // A fixed-size box for the ring + number, kept separate from the
-            // "TODAY" label below so the label always stacks cleanly above
-            // it instead of both being independently centered on the whole
-            // (taller) cell and overlapping.
+            // A fixed-size box for the ring + number. The "TODAY" label (see
+            // below) is appended INSIDE this box, absolutely positioned above
+            // it, so it never adds flex-flow height that would push the
+            // circle itself down relative to every other (label-less) cell
+            // in the same calendar row.
             const circle = document.createElement('div');
             circle.className = 'cal-day-circle';
 
@@ -430,7 +431,7 @@ function generateMonthGrid(year, month, isLogMode, cycles, predictedPeriods = []
                 const todayLabel = document.createElement('div');
                 todayLabel.className = 'cal-day-today-label';
                 todayLabel.textContent = 'TODAY';
-                dayCell.appendChild(todayLabel);
+                circle.appendChild(todayLabel);
             }
 
             dayCell.appendChild(circle);
