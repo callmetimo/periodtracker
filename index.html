@@ -148,37 +148,54 @@
             <div id="view-cycle-details" class="view" style="z-index: 30;">
                 <header class="app-header" style="background-color: #F5F5F5; border-top-left-radius: 24px; border-top-right-radius: 24px;">
                     <h2 style="margin-left: auto; margin-right: auto;">Cycle details</h2>
+                    <span class="material-icons-outlined" id="detail-edit-btn" role="button" tabindex="0" aria-label="Edit this cycle" style="cursor: pointer; font-size: 22px; position: absolute; right: 56px; display: none;">edit</span>
                     <span class="material-icons-outlined" id="back-to-history" role="button" tabindex="0" aria-label="Close cycle details" style="cursor: pointer; font-size: 24px; position: absolute; right: 20px;">close</span>
                 </header>
                 <div class="home-scroll-content">
-                    <!-- Cycle Summary Card -->
-                    <div class="detail-card">
-                        <h3 id="detail-cycle-title">Current cycle: 29 days</h3>
-                        <p id="detail-cycle-start" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Started Jul 9</p>
-                        <div class="cycle-dots" id="detail-cycle-dots">
-                            <!-- JS will populate dots -->
+                    <div id="detail-view-mode">
+                        <!-- Cycle Summary Card -->
+                        <div class="detail-card">
+                            <h3 id="detail-cycle-title">Current cycle: 29 days</h3>
+                            <p id="detail-cycle-start" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Started Jul 9</p>
+                            <div class="cycle-dots" id="detail-cycle-dots">
+                                <!-- JS will populate dots -->
+                            </div>
+                        </div>
+
+                        <!-- Insights Card -->
+                        <div class="detail-card insights-card">
+                            <div class="insight-row">
+                                <div class="insight-icon icon-fertile">
+                                    <span class="material-icons-outlined" aria-hidden="true">bubble_chart</span>
+                                </div>
+                                <div class="insight-text" id="detail-fertile-text">It's likely that your fertile window lasted from Jul 18 to 24</div>
+                            </div>
+                            <div class="insight-row">
+                                <div class="insight-icon icon-ovulation">
+                                    <span class="material-icons-outlined" aria-hidden="true">adjust</span>
+                                </div>
+                                <div class="insight-text" id="detail-ovulation-text">It's likely that you ovulated on Jul 22</div>
+                            </div>
+                            <div class="insight-row">
+                                <div class="insight-icon icon-period">
+                                    <span class="material-icons-outlined" aria-hidden="true">water_drop</span>
+                                </div>
+                                <div class="insight-text" id="detail-period-text">Your period lasted 5 days</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Insights Card -->
-                    <div class="detail-card insights-card">
-                        <div class="insight-row">
-                            <div class="insight-icon icon-fertile">
-                                <span class="material-icons-outlined" aria-hidden="true">bubble_chart</span>
-                            </div>
-                            <div class="insight-text" id="detail-fertile-text">It's likely that your fertile window lasted from Jul 18 to 24</div>
-                        </div>
-                        <div class="insight-row">
-                            <div class="insight-icon icon-ovulation">
-                                <span class="material-icons-outlined" aria-hidden="true">adjust</span>
-                            </div>
-                            <div class="insight-text" id="detail-ovulation-text">It's likely that you ovulated on Jul 22</div>
-                        </div>
-                        <div class="insight-row">
-                            <div class="insight-icon icon-period">
-                                <span class="material-icons-outlined" aria-hidden="true">water_drop</span>
-                            </div>
-                            <div class="insight-text" id="detail-period-text">Your period lasted 5 days</div>
+                    <!-- Edit Cycle Form (hidden unless the cycle is within the edit window) -->
+                    <div id="detail-edit-mode" class="detail-card" style="display: none;">
+                        <h3 style="margin-bottom: 16px;">Edit cycle</h3>
+                        <label for="detail-edit-startdate" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Period start date</label>
+                        <input type="date" id="detail-edit-startdate" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border-color); margin-bottom: 16px; font-size: 1rem; box-sizing: border-box;">
+                        <label for="detail-edit-daycount" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Period length (days)</label>
+                        <input type="number" id="detail-edit-daycount" min="1" max="14" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border-color); margin-bottom: 8px; font-size: 1rem; box-sizing: border-box;">
+                        <p id="detail-edit-error" style="color: #C0392B; font-size: 0.8rem; margin: 4px 0 8px; display: none;"></p>
+                        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+                            <button id="detail-edit-cancel" class="text-button text-muted">Cancel</button>
+                            <button id="detail-edit-save" class="text-button text-primary">Save</button>
                         </div>
                     </div>
                 </div>

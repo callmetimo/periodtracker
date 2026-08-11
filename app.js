@@ -219,6 +219,94 @@ function initNavigation() {
         }
     });
 
+    // Cycle Details — Edit form. The edit icon is only ever shown (see
+    // showCycleDetails) when the open cycle has an id and is still within
+    // PeriodModel's edit window, but the Save handler re-checks both anyway
+    // since currentDetailCycle/the window boundary could be stale by the
+    // time Save is actually pressed.
+    const detailEditBtn = document.getElementById('detail-edit-btn');
+    const detailViewMode = document.getElementById('detail-view-mode');
+    const detailEditMode = document.getElementById('detail-edit-mode');
+    const detailEditStart = document.getElementById('detail-edit-startdate');
+    const detailEditDayCount = document.getElementById('detail-edit-daycount');
+    const detailEditError = document.getElementById('detail-edit-error');
+
+    const openEditForm = () => {
+        if (!currentDetailCycle) return;
+        detailEditStart.value = currentDetailCycle.startDate;
+        detailEditDayCount.value = currentDetailCycle.periodDayCount;
+        detailEditError.style.display = 'none';
+        detailViewMode.style.display = 'none';
+        detailEditMode.style.display = '';
+    };
+    if (detailEditBtn) {
+        detailEditBtn.addEventListener('click', openEditForm);
+        detailEditBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                openEditForm();
+            }
+        });
+    }
+
+    document.getElementById('detail-edit-cancel').addEventListener('click', () => {
+        detailEditMode.style.display = 'none';
+        detailViewMode.style.display = '';
+    });
+
+    document.getElementById('detail-edit-save').addEventListener('click', async () => {
+        if (!currentDetailCycle) return;
+
+        const newStart = detailEditStart.value;
+        const newDayCount = parseInt(detailEditDayCount.value, 10);
+        const showError = (msg) => {
+            detailEditError.textContent = msg;
+            detailEditError.style.display = '';
+        };
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(newStart) || !(newDayCount > 0)) {
+            showError('Please enter a valid date and period length.');
+            return;
+        }
+        // Re-check the window here (not just when the Edit button was shown) —
+        // both the original cycle and the date it's being moved to must fall
+        // inside it, so editing can't be used to sneak in changes to (or
+        // relocate a cycle into) history the guardrail is meant to protect.
+        if (!PeriodModel.isWithinEditWindow(currentDetailCycle.startDate) || !PeriodModel.isWithinEditWindow(newStart)) {
+            showError(`Cycles can only be edited within ${PeriodModel.EDIT_WINDOW_DAYS} days of their start date.`);
+            return;
+        }
+
+        PeriodModel.updatePeriod(currentDetailCycle.id, { startDate: newStart, periodDayCount: newDayCount });
+
+        document.getElementById('view-cycle-details').classList.remove('active');
+        currentDetailCycle = null;
+
+        let editedCycles = PeriodModel.computeCycles();
+        refreshHomeView(editedCycles);
+        refreshCycleInsights(editedCycles);
+        const activeFilterPill = document.querySelector('.history-filters .pill.active');
+        if (activeFilterPill) activeFilterPill.click(); else renderHistoryList('all');
+        initYearView();
+
+        if (typeof DataStore !== 'undefined') {
+            try {
+                await DataStore.syncReconcile();
+                editedCycles = PeriodModel.computeCycles();
+                refreshHomeView(editedCycles);
+                refreshCycleInsights(editedCycles);
+                const filterPill = document.querySelector('.history-filters .pill.active');
+                if (filterPill) filterPill.click(); else renderHistoryList('all');
+                initYearView();
+                showToast('✓ Synced to Google Drive!');
+            } catch (e) {
+                showToast('Saved locally (sync failed)');
+            }
+        } else {
+            showToast('Saved!');
+        }
+    });
+
     // Close cycle details sheet when clicking outside
     document.addEventListener('click', (e) => {
         const cycleDetails = document.getElementById('view-cycle-details');
@@ -641,7 +729,22 @@ function renderHistoryList(limit) {
     });
 }
 
+// The cycle currently open in the Cycle Details sheet — set by
+// showCycleDetails(), read by the edit form's Save handler so it knows which
+// id to patch. null whenever that sheet isn't open.
+let currentDetailCycle = null;
+
 function showCycleDetails(cycle) {
+    currentDetailCycle = cycle;
+
+    document.getElementById('detail-view-mode').style.display = '';
+    document.getElementById('detail-edit-mode').style.display = 'none';
+    const editBtn = document.getElementById('detail-edit-btn');
+    if (editBtn) {
+        const canEdit = !!cycle.id && PeriodModel.isWithinEditWindow(cycle.startDate);
+        editBtn.style.display = canEdit ? '' : 'none';
+    }
+
     document.getElementById('detail-cycle-title').textContent = `Cycle length: ${formatCycleTitle(cycle)}`;
     document.getElementById('detail-cycle-start').textContent =
         `Started ${DateUtils.formatDisplayDate(DateUtils.parseISODate(cycle.startDate))}`;

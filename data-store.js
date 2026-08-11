@@ -21,6 +21,7 @@ const DataStore = (() => {
       'Cycle Length (days)',
       'Period Days',
       'Ovulation Day (day # in cycle)',
+      'ID',
     ];
 
     const dataRows = cycles.map(c => [
@@ -29,6 +30,7 @@ const DataStore = (() => {
       c.predicted ? '' : c.cycleLength,
       c.periodDayCount,
       c.predicted ? '' : c.ovulationDayNumber,
+      c.id,
     ]);
 
     return [header, ...dataRows];
@@ -120,17 +122,20 @@ const DataStore = (() => {
     await SheetsClient.clearValues(spreadsheetId, 'Data!A1:Z1000');
     await SheetsClient.updateValues(
       spreadsheetId,
-      `Data!A1:E${rows.length}`,
+      `Data!A1:F${rows.length}`,
       rows,
       'RAW'
     );
     console.log(`[DataStore] Synced ${rows.length - 1} cycles to Google Sheets ✓`);
   }
 
-  // Reads the sheet back into {startDate, periodDayCount} pairs — only those
-  // two columns are trusted; End Date/Cycle Length/Ovulation Day are always
-  // recomputed locally by PeriodModel so two derivations of the same value
-  // can never drift apart.
+  // Reads the sheet back into {id, startDate, periodDayCount} triples —
+  // those are the only trusted columns; End Date/Cycle Length/Ovulation Day
+  // are always recomputed locally by PeriodModel so two derivations of the
+  // same value can never drift apart. `id` (column F) may be absent on rows
+  // written before that column existed — those come back with id undefined,
+  // and syncReconcile() is responsible for reconciling them by startDate
+  // instead so pre-existing cycles aren't mistaken for new ones.
   //
   // Returns:
   //   [] if the sheet was read successfully and genuinely has no data rows —
@@ -141,15 +146,16 @@ const DataStore = (() => {
   async function loadData() {
     if (!spreadsheetId) return null;
     try {
-      const res = await SheetsClient.getValues(spreadsheetId, 'Data!A1:E1000');
+      const res = await SheetsClient.getValues(spreadsheetId, 'Data!A1:F1000');
       const values = (res && res.values) || [];
       const dataRows = values.slice(1); // skip header row
       const periods = [];
       for (const row of dataRows) {
         const startDate = row[0];
         const periodDayCount = parseInt(row[3], 10);
+        const id = row[5] || undefined;
         if (/^\d{4}-\d{2}-\d{2}$/.test(startDate) && periodDayCount > 0) {
-          periods.push({ startDate, periodDayCount });
+          periods.push({ id, startDate, periodDayCount });
         }
       }
       return periods;
@@ -161,10 +167,18 @@ const DataStore = (() => {
 
   // The single sync entrypoint for anything that isn't brand-new-spreadsheet
   // creation: reads the cloud sheet, merges it with local as a union keyed by
-  // startDate (keeping the larger period-day-count on conflict — a rule that
-  // can only ever add data, never remove it), persists the merged result
+  // id (keeping the larger period-day-count on conflict — a rule that can
+  // only ever add data, never remove it), persists the merged result
   // locally, then writes that superset back. If the cloud read fails, this
   // aborts without touching anything rather than risking a blind overwrite.
+  //
+  // Matching by id (rather than startDate, as before) is what makes an
+  // *edit* — including one that changes the startDate itself — reconcile as
+  // an update to the same cycle instead of coexisting alongside the old one.
+  // Cloud rows written before the ID column existed come back from
+  // loadData() with no id; those are paired up with the local period at the
+  // same startDate (if any) so upgrading doesn't duplicate every pre-existing
+  // cycle on the first sync.
   async function syncReconcile() {
     const cloudPeriods = await loadData();
     if (cloudPeriods === null) {
@@ -172,14 +186,22 @@ const DataStore = (() => {
     }
 
     const localPeriods = PeriodModel.getPeriods();
-    const byStartDate = new Map();
-    for (const p of [...cloudPeriods, ...localPeriods]) {
-      const existing = byStartDate.get(p.startDate);
+    const localByStart = new Map(localPeriods.map(p => [p.startDate, p]));
+    const normalizedCloud = cloudPeriods.map(p => {
+      if (p.id) return p;
+      const match = localByStart.get(p.startDate);
+      return match ? { ...p, id: match.id } : p;
+    });
+
+    const byKey = new Map();
+    for (const p of [...normalizedCloud, ...localPeriods]) {
+      const key = p.id || `date:${p.startDate}`;
+      const existing = byKey.get(key);
       if (!existing || p.periodDayCount > existing.periodDayCount) {
-        byStartDate.set(p.startDate, p);
+        byKey.set(key, p);
       }
     }
-    PeriodModel.setPeriods(Array.from(byStartDate.values()));
+    PeriodModel.setPeriods(Array.from(byKey.values()));
 
     await saveData();
   }

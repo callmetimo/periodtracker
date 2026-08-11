@@ -8,9 +8,14 @@
 // shows from this one module, so they can no longer disagree with each other.
 //
 // Only one fact is ever persisted: `periodTrackerPeriods`, an array of
-// { startDate: "YYYY-MM-DD", periodDayCount: number }. Cycle length, fertile
-// window, and ovulation day are always *computed*, never stored — so there is
-// only one place that can get them wrong, and nothing to keep in sync.
+// { id: string, startDate: "YYYY-MM-DD", periodDayCount: number }. Cycle
+// length, fertile window, and ovulation day are always *computed*, never
+// stored — so there is only one place that can get them wrong, and nothing
+// to keep in sync. `id` is a stable per-cycle identity (independent of
+// startDate) that lets a cycle be *edited* in place — locally and in the
+// synced Google Sheet — rather than only ever added/removed wholesale. Any
+// period object read from storage without one (pre-existing data from before
+// `id` existed) is backfilled the first time it's read; see getPeriods().
 const PeriodModel = (() => {
   const LS_PERIODS = 'periodTrackerPeriods';
   const LS_HISTORY_LEGACY = 'periodTrackerHistory';
@@ -22,19 +27,38 @@ const PeriodModel = (() => {
   // hardcoded copy.
   const PREMENSTRUAL_WINDOW_DAYS = 3;
 
+  // How far back a logged cycle can be edited (by startDate), and how far
+  // back a new startDate can move it. Keeps "edit" from becoming a backdoor
+  // for silently rewriting old history that predictions/averages depend on.
+  const EDIT_WINDOW_DAYS = 90;
+
+  function generateId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+
+  // Whether a cycle starting on `startDate` currently falls inside the edit
+  // window (i.e. today isn't more than EDIT_WINDOW_DAYS days past it).
+  function isWithinEditWindow(startDate, todayIso = DateUtils.toISODate(new Date())) {
+    return DateUtils.daysBetween(startDate, todayIso) <= EDIT_WINDOW_DAYS;
+  }
+
   function periodEnd(period) {
     return DateUtils.toISODate(DateUtils.addDays(DateUtils.parseISODate(period.startDate), period.periodDayCount - 1));
   }
 
   // Sorts by start date and merges any periods that overlap or are adjacent
   // (gap-free) into one, so addPeriod() can never create two overlapping
-  // entries for the same days.
+  // entries for the same days. Also the single place that guarantees every
+  // period carries an `id` — one is generated for any period missing one.
+  // When two periods merge, the earlier-starting one's id wins (periods are
+  // sorted ascending, so that's always `last`, already untouched below).
   function normalize(periods) {
     const sorted = periods.slice().sort((a, b) => a.startDate.localeCompare(b.startDate));
     const merged = [];
     for (const p of sorted) {
       if (merged.length === 0) {
-        merged.push({ startDate: p.startDate, periodDayCount: p.periodDayCount });
+        merged.push({ id: p.id || generateId(), startDate: p.startDate, periodDayCount: p.periodDayCount });
         continue;
       }
       const last = merged[merged.length - 1];
@@ -45,7 +69,7 @@ const PeriodModel = (() => {
         const newEndDate = pEndDate > lastEndDate ? pEndDate : lastEndDate;
         last.periodDayCount = DateUtils.daysBetween(last.startDate, DateUtils.toISODate(newEndDate)) + 1;
       } else {
-        merged.push({ startDate: p.startDate, periodDayCount: p.periodDayCount });
+        merged.push({ id: p.id || generateId(), startDate: p.startDate, periodDayCount: p.periodDayCount });
       }
     }
     return merged;
@@ -101,12 +125,27 @@ const PeriodModel = (() => {
   // The log-calendar view uses these against an in-memory staged copy so
   // "Cancel" can discard taps without persisting them — only "Save" commits
   // via the persisted wrappers below, matching the original Save/Cancel UX.
-  function addPeriodTo(periods, startDate, dayCount = 5) {
-    return normalize([...periods, { startDate, periodDayCount: dayCount }]);
+  function addPeriodTo(periods, startDate, dayCount = 5, id) {
+    return normalize([...periods, { id, startDate, periodDayCount: dayCount }]);
   }
 
   function removePeriodFrom(periods, startDate) {
     return normalize(periods.filter(p => p.startDate !== startDate));
+  }
+
+  // Edits a period *in place*, preserving its id (unlike remove+add, which
+  // would hand it a new one) — this is what lets the same cycle be matched
+  // and patched in the synced Google Sheet rather than treated as a new row.
+  // No-ops (returns `periods` unchanged) if `id` isn't found.
+  function updatePeriodTo(periods, id, { startDate, periodDayCount } = {}) {
+    const existing = periods.find(p => p.id === id);
+    if (!existing) return periods;
+    const rest = periods.filter(p => p.id !== id);
+    return normalize([...rest, {
+      id,
+      startDate: startDate !== undefined ? startDate : existing.startDate,
+      periodDayCount: periodDayCount !== undefined ? periodDayCount : existing.periodDayCount,
+    }]);
   }
 
   // Returns the raw logged period (start date + day count) covering dateStr,
@@ -121,10 +160,23 @@ const PeriodModel = (() => {
   }
 
   // ── Persisted wrappers ───────────────────────────────────────────
+  // Reads stored periods, backfilling an `id` onto any that predate the
+  // field existing (and persisting that backfill) so every caller can rely
+  // on `id` always being present.
   function getPeriods() {
     try {
       const raw = localStorage.getItem(LS_PERIODS);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        let changed = false;
+        const withIds = parsed.map(p => {
+          if (p.id) return p;
+          changed = true;
+          return { ...p, id: generateId() };
+        });
+        if (changed) localStorage.setItem(LS_PERIODS, JSON.stringify(withIds));
+        return withIds;
+      }
     } catch (e) {}
     const migrated = migrateLegacy();
     localStorage.setItem(LS_PERIODS, JSON.stringify(migrated));
@@ -143,6 +195,13 @@ const PeriodModel = (() => {
 
   function removePeriod(startDate) {
     return setPeriods(removePeriodFrom(getPeriods(), startDate));
+  }
+
+  // Persisted edit-in-place. Callers (UI) are responsible for enforcing
+  // isWithinEditWindow() before calling this — it does no gating itself so
+  // programmatic callers (e.g. sync merges) aren't accidentally blocked.
+  function updatePeriod(id, changes) {
+    return setPeriods(updatePeriodTo(getPeriods(), id, changes));
   }
 
   function findPeriodContaining(dateStr) {
@@ -205,6 +264,7 @@ const PeriodModel = (() => {
       }
 
       return {
+        id: p.id,
         startDate: p.startDate,
         periodDayCount: p.periodDayCount,
         periodEndDate,
@@ -243,9 +303,9 @@ const PeriodModel = (() => {
   }
 
   return {
-    getPeriods, setPeriods, addPeriod, removePeriod, findPeriodContaining,
-    addPeriodTo, removePeriodFrom, findPeriodIn,
-    computeCycles, classifyDate, estimateCycleLength,
-    PREMENSTRUAL_WINDOW_DAYS,
+    getPeriods, setPeriods, addPeriod, removePeriod, updatePeriod, findPeriodContaining,
+    addPeriodTo, removePeriodFrom, updatePeriodTo, findPeriodIn,
+    computeCycles, classifyDate, estimateCycleLength, isWithinEditWindow,
+    PREMENSTRUAL_WINDOW_DAYS, EDIT_WINDOW_DAYS,
   };
 })();
