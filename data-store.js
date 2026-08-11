@@ -35,21 +35,33 @@ const DataStore = (() => {
   }
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────
+  // Tag on the Drive file itself so re-discovery doesn't depend solely on the
+  // exact display name (which the appProperties-tagged query below still
+  // falls back to, for sheets created before this tag existed).
+  const APP_PROPERTY = { key: 'periodTrackerApp', value: 'true' };
+
+  // Returns:
+  //   a file object  — a matching sheet was found (if several, the oldest —
+  //                     most likely the user's real long-lived data).
+  //   null           — the search genuinely succeeded and found nothing.
+  // Throws if the search itself could not be completed (after retries) —
+  // callers must NOT treat that the same as "found nothing", since doing so
+  // is exactly what causes duplicate spreadsheets to get created.
   async function findExistingSpreadsheet() {
-    try {
-      const res = await SheetsClient.findFiles(
-        "trashed=false and mimeType='application/vnd.google-apps.spreadsheet' and name='Period Tracker Data'"
+    const res = await SheetsClient.findFiles(
+      "trashed=false and mimeType='application/vnd.google-apps.spreadsheet' and " +
+      `(appProperties has { key='${APP_PROPERTY.key}' and value='${APP_PROPERTY.value}' } or name='Period Tracker Data')`
+    );
+    const files = (res.files || []).filter(f => !f.trashed);
+    if (!files.length) return null;
+    if (files.length > 1) {
+      console.warn(
+        '[DataStore] Multiple "Period Tracker Data" sheets found in Drive — using the oldest and ignoring the rest:',
+        files.map(f => ({ id: f.id, createdTime: f.createdTime }))
       );
-      const files = (res.files || []).filter(f => !f.trashed);
-      if (files.length) {
-        files.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
-        return files[0];
-      }
-      return null;
-    } catch (e) {
-      console.warn('[DataStore] Drive search failed', e);
-      return null;
     }
+    files.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
+    return files[0];
   }
 
   async function bootstrap() {
@@ -61,8 +73,18 @@ const DataStore = (() => {
       return;
     }
 
-    // First ever sign-in: search before creating.
-    const existing = await findExistingSpreadsheet();
+    // First ever sign-in (or localStorage was wiped, e.g. by iOS re-adding the
+    // home-screen app): search before creating. If the search itself fails,
+    // do NOT fall through to creating a new spreadsheet — that's how
+    // duplicates happen. Surface a retryable error instead.
+    let existing;
+    try {
+      existing = await findExistingSpreadsheet();
+    } catch (e) {
+      console.warn('[DataStore] Drive search failed', e);
+      throw new Error('Could not verify whether a Period Tracker sheet already exists — please check your connection and try signing in again.');
+    }
+
     if (existing) {
       spreadsheetId = existing.id;
       localStorage.setItem(LS_SS_ID, spreadsheetId);
@@ -70,14 +92,20 @@ const DataStore = (() => {
       return;
     }
 
-    // Brand new: create the spreadsheet then write data. Nothing to reconcile —
-    // it's empty by construction.
+    // Genuinely brand new: create the spreadsheet, tag it so future searches
+    // can find it reliably, then write data. Nothing to reconcile — it's
+    // empty by construction.
     const created = await SheetsClient.create({
       properties: { title: 'Period Tracker Data' },
       sheets: [{ properties: { title: 'Data', sheetId: 0 } }],
     });
     spreadsheetId = created.spreadsheetId;
     localStorage.setItem(LS_SS_ID, spreadsheetId);
+    try {
+      await SheetsClient.setAppProperties(spreadsheetId, { [APP_PROPERTY.key]: APP_PROPERTY.value });
+    } catch (e) {
+      console.warn('[DataStore] Failed to tag new spreadsheet with appProperties — name-based matching will still find it', e);
+    }
     await saveData();
   }
 

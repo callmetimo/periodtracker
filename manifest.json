@@ -1,0 +1,12 @@
+{
+  "name": "Period Tracker",
+  "short_name": "Period Tracker",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FF5A7E",
+  "icons": [
+    { "src": "icon.png", "sizes": "680x680", "type": "image/png", "purpose": "any" }
+  ]
+}

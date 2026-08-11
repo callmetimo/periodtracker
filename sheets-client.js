@@ -87,17 +87,47 @@ const SheetsClient = (() => {
     });
   }
 
+  function setAppProperties(fileId, props) {
+    return authedFetch(`${DRIVE_BASE}/${fileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appProperties: props }),
+    });
+  }
+
   function getFileMeta(fileId) {
     return authedFetch(`${DRIVE_BASE}/${fileId}?fields=size,modifiedTime`);
   }
 
+  // A single flaky Drive search must never be mistaken for "no file exists" —
+  // that's exactly what causes bootstrap() to mint a duplicate spreadsheet
+  // (see data-store.js). Retry with backoff before giving up.
+  async function withRetry(fn, attempts = 3, baseDelayMs = 500) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await fn();
+      } catch (err) {
+        lastErr = err;
+        if (i < attempts - 1) {
+          await new Promise(r => setTimeout(r, baseDelayMs * Math.pow(2, i)));
+        }
+      }
+    }
+    throw lastErr;
+  }
+
   function findFiles(query) {
-    const params = new URLSearchParams({ q: query, fields: 'files(id,name,createdTime,trashed)', spaces: 'drive' });
-    return authedFetch(`${DRIVE_BASE}?${params.toString()}`);
+    const params = new URLSearchParams({
+      q: query,
+      fields: 'files(id,name,createdTime,trashed,appProperties)',
+      spaces: 'drive',
+    });
+    return withRetry(() => authedFetch(`${DRIVE_BASE}?${params.toString()}`));
   }
 
   return {
     create, batchUpdate, getValues, updateValues, appendValues, clearValues,
-    getSpreadsheetMeta, trashFile, getFileMeta, findFiles,
+    getSpreadsheetMeta, trashFile, setAppProperties, getFileMeta, findFiles,
   };
 })();
