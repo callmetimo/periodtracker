@@ -5,6 +5,27 @@ const DataStore = (() => {
   const LS_SS_ID = 'periodTracker_spreadsheetId';
   let spreadsheetId = localStorage.getItem(LS_SS_ID) || null;
 
+  // Snapshot of {startDate, periodDayCount} per id, keyed by id, as of the
+  // last successful saveData() write. This is the 3-way-merge baseline:
+  // syncReconcile() compares the cloud sheet against *this*, not against
+  // local, to tell "the user edited the sheet" (cloud differs from what we
+  // last wrote there) apart from "this is just our own value echoed back."
+  // Without this, a value the app itself computed and wrote would look
+  // indistinguishable from a real edit on every subsequent sync.
+  const LS_LAST_SYNCED = 'periodTracker_lastSyncedRows';
+
+  function getLastSynced() {
+    try {
+      return JSON.parse(localStorage.getItem(LS_LAST_SYNCED)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function setLastSynced(snapshot) {
+    localStorage.setItem(LS_LAST_SYNCED, JSON.stringify(snapshot));
+  }
+
   // ── ROW BUILDER ───────────────────────────────────────────────
   // Builds structured sheet rows straight from PeriodModel — the single
   // source of truth also used by every in-app view. cycleLength/endDate/
@@ -126,6 +147,16 @@ const DataStore = (() => {
       rows,
       'RAW'
     );
+
+    // Record exactly what we just wrote, keyed by id, as the new merge
+    // baseline for the next syncReconcile() — see LS_LAST_SYNCED above.
+    const snapshot = {};
+    for (const row of rows.slice(1)) {
+      const [startDate, , , periodDayCount, , id] = row;
+      if (id) snapshot[id] = { startDate, periodDayCount };
+    }
+    setLastSynced(snapshot);
+
     console.log(`[DataStore] Synced ${rows.length - 1} cycles to Google Sheets ✓`);
   }
 
@@ -166,19 +197,27 @@ const DataStore = (() => {
   }
 
   // The single sync entrypoint for anything that isn't brand-new-spreadsheet
-  // creation: reads the cloud sheet, merges it with local as a union keyed by
-  // id (keeping the larger period-day-count on conflict — a rule that can
-  // only ever add data, never remove it), persists the merged result
-  // locally, then writes that superset back. If the cloud read fails, this
-  // aborts without touching anything rather than risking a blind overwrite.
+  // creation: reads the cloud sheet, merges it with local using a 3-way diff
+  // against the last-synced baseline (LS_LAST_SYNCED — what the app itself
+  // last wrote), persists the merged result locally, then writes that back.
+  // If the cloud read fails, this aborts without touching anything rather
+  // than risking a blind overwrite.
   //
   // Matching by id (rather than startDate, as before) is what makes an
   // *edit* — including one that changes the startDate itself — reconcile as
   // an update to the same cycle instead of coexisting alongside the old one.
-  // Cloud rows written before the ID column existed come back from
+  // Cloud rows written before the ID column existed (or added directly in
+  // the sheet by hand, with the ID column left blank) come back from
   // loadData() with no id; those are paired up with the local period at the
   // same startDate (if any) so upgrading doesn't duplicate every pre-existing
-  // cycle on the first sync.
+  // cycle, and so a real edit isn't mistaken for a brand-new row.
+  //
+  // Per id, the merge rule is: whichever side (cloud or local) actually
+  // changed since the last-synced baseline wins. This is what lets a manual
+  // sheet edit — including one that shrinks periodDayCount, adds a new row
+  // for a previously-missed period, or removes a bad row entirely — stick,
+  // while still letting an in-app edit/addition made since the last sync
+  // (e.g. logging today's period) survive until it's pushed up.
   async function syncReconcile() {
     const cloudPeriods = await loadData();
     if (cloudPeriods === null) {
@@ -193,15 +232,54 @@ const DataStore = (() => {
       return match ? { ...p, id: match.id } : p;
     });
 
-    const byKey = new Map();
-    for (const p of [...normalizedCloud, ...localPeriods]) {
-      const key = p.id || `date:${p.startDate}`;
-      const existing = byKey.get(key);
-      if (!existing || p.periodDayCount > existing.periodDayCount) {
-        byKey.set(key, p);
+    const lastSynced = getLastSynced();
+    const cloudById = new Map(normalizedCloud.filter(p => p.id).map(p => [p.id, p]));
+    const localById = new Map(localPeriods.map(p => [p.id, p]));
+    const sameRow = (a, b) => !!a && !!b && a.startDate === b.startDate && a.periodDayCount === b.periodDayCount;
+
+    const allIds = new Set([...cloudById.keys(), ...localById.keys(), ...Object.keys(lastSynced)]);
+    const merged = [];
+    for (const id of allIds) {
+      const cloud = cloudById.get(id);
+      const local = localById.get(id);
+      const baseline = lastSynced[id];
+
+      if (cloud && baseline && !sameRow(cloud, baseline)) {
+        // Sheet was edited since the last sync (including a smaller count) — sheet wins.
+        merged.push(cloud);
+      } else if (!cloud && baseline && sameRow(local, baseline)) {
+        // Row existed at last sync, is now gone from the sheet, and local
+        // hasn't diverged from that same baseline — the user deleted it.
+        continue;
+      } else if (cloud && !baseline && !local) {
+        // Brand-new row typed directly into the sheet (no id column, no
+        // local match by startDate either) — adopt it.
+        merged.push(cloud);
+      } else if (cloud && local && !baseline && !sameRow(cloud, local)) {
+        // No baseline recorded for this id yet — e.g. this is the very first
+        // sync since this reconciliation logic shipped, or localStorage's
+        // snapshot was cleared — but cloud and local disagree. Assume the
+        // sheet holds a real edit that predates any baseline ever being
+        // taken, and prefer it, rather than defaulting to local and
+        // silently discarding an edit the user already made.
+        merged.push(cloud);
+      } else if (local) {
+        // Local changed since the last sync (in-app edit/addition not yet
+        // synced), or nothing changed on either side — keep local as-is.
+        merged.push(local);
+      } else if (cloud) {
+        merged.push(cloud);
       }
     }
-    PeriodModel.setPeriods(Array.from(byKey.values()));
+
+    // Rows without an id at all (new sheet additions that never matched a
+    // local startDate) still need to be included — allIds is keyed by id so
+    // idless cloud rows would otherwise be dropped entirely.
+    for (const p of normalizedCloud) {
+      if (!p.id) merged.push(p);
+    }
+
+    PeriodModel.setPeriods(merged);
 
     await saveData();
   }
