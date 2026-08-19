@@ -27,20 +27,9 @@ const PeriodModel = (() => {
   // hardcoded copy.
   const PREMENSTRUAL_WINDOW_DAYS = 3;
 
-  // How far back a logged cycle can be edited (by startDate), and how far
-  // back a new startDate can move it. Keeps "edit" from becoming a backdoor
-  // for silently rewriting old history that predictions/averages depend on.
-  const EDIT_WINDOW_DAYS = 90;
-
   function generateId() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
     return 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-  }
-
-  // Whether a cycle starting on `startDate` currently falls inside the edit
-  // window (i.e. today isn't more than EDIT_WINDOW_DAYS days past it).
-  function isWithinEditWindow(startDate, todayIso = DateUtils.toISODate(new Date())) {
-    return DateUtils.daysBetween(startDate, todayIso) <= EDIT_WINDOW_DAYS;
   }
 
   function periodEnd(period) {
@@ -197,9 +186,9 @@ const PeriodModel = (() => {
     return setPeriods(removePeriodFrom(getPeriods(), startDate));
   }
 
-  // Persisted edit-in-place. Callers (UI) are responsible for enforcing
-  // isWithinEditWindow() before calling this — it does no gating itself so
-  // programmatic callers (e.g. sync merges) aren't accidentally blocked.
+  // Persisted edit-in-place. Any logged cycle can be edited, regardless of
+  // age — see README's "What broke before" #8 for why the old 90-day window
+  // was removed.
   function updatePeriod(id, changes) {
     return setPeriods(updatePeriodTo(getPeriods(), id, changes));
   }
@@ -305,7 +294,7 @@ const PeriodModel = (() => {
   return {
     getPeriods, setPeriods, addPeriod, removePeriod, updatePeriod, findPeriodContaining,
     addPeriodTo, removePeriodFrom, updatePeriodTo, findPeriodIn,
-    computeCycles, classifyDate, estimateCycleLength, isWithinEditWindow,
-    PREMENSTRUAL_WINDOW_DAYS, EDIT_WINDOW_DAYS,
+    computeCycles, classifyDate, estimateCycleLength,
+    PREMENSTRUAL_WINDOW_DAYS,
   };
 })();

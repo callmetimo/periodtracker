@@ -21,8 +21,27 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sheets sync call would hang forever waiting for a tap that nothing
         // ever asked for. triggerFirstTapSync() itself no-ops when not in
         // deferred mode, so registering this unconditionally is safe.
-        document.addEventListener('click', () => {
-            Auth.triggerFirstTapSync().catch(err => console.warn('[auth] first-tap sync failed', err));
+        //
+        // Also immediately pulls a real sync once the token is obtained —
+        // without this, a returning user's Google Sheet is never actually
+        // read until they happen to log/edit a cycle or press "Sync Now"
+        // manually, so an edit made directly in the sheet wouldn't show up
+        // just from opening the app.
+        document.addEventListener('click', async () => {
+            try {
+                const gotToken = await Auth.triggerFirstTapSync();
+                if (gotToken && typeof DataStore !== 'undefined') {
+                    await DataStore.syncReconcile();
+                    const cycles = PeriodModel.computeCycles();
+                    refreshHomeView(cycles);
+                    refreshCycleInsights(cycles);
+                    const activeFilterPill = document.querySelector('.history-filters .pill.active');
+                    if (activeFilterPill) activeFilterPill.click(); else renderHistoryList('all');
+                    initYearView();
+                }
+            } catch (err) {
+                console.warn('[auth] first-tap sync failed', err);
+            }
         }, { once: true });
 
         const btnSignOut = document.getElementById('btn-profile-signout');
@@ -220,10 +239,8 @@ function initNavigation() {
     });
 
     // Cycle Details — Edit form. The edit icon is only ever shown (see
-    // showCycleDetails) when the open cycle has an id and is still within
-    // PeriodModel's edit window, but the Save handler re-checks both anyway
-    // since currentDetailCycle/the window boundary could be stale by the
-    // time Save is actually pressed.
+    // showCycleDetails) when the open cycle has an id — any logged cycle,
+    // regardless of age, can be edited.
     const detailEditBtn = document.getElementById('detail-edit-btn');
     const detailViewMode = document.getElementById('detail-view-mode');
     const detailEditMode = document.getElementById('detail-edit-mode');
@@ -268,15 +285,6 @@ function initNavigation() {
             showError('Please enter a valid date and period length.');
             return;
         }
-        // Re-check the window here (not just when the Edit button was shown) —
-        // both the original cycle and the date it's being moved to must fall
-        // inside it, so editing can't be used to sneak in changes to (or
-        // relocate a cycle into) history the guardrail is meant to protect.
-        if (!PeriodModel.isWithinEditWindow(currentDetailCycle.startDate) || !PeriodModel.isWithinEditWindow(newStart)) {
-            showError(`Cycles can only be edited within ${PeriodModel.EDIT_WINDOW_DAYS} days of their start date.`);
-            return;
-        }
-
         PeriodModel.updatePeriod(currentDetailCycle.id, { startDate: newStart, periodDayCount: newDayCount });
 
         document.getElementById('view-cycle-details').classList.remove('active');
@@ -741,8 +749,9 @@ function showCycleDetails(cycle) {
     document.getElementById('detail-edit-mode').style.display = 'none';
     const editBtn = document.getElementById('detail-edit-btn');
     if (editBtn) {
-        const canEdit = !!cycle.id && PeriodModel.isWithinEditWindow(cycle.startDate);
-        editBtn.style.display = canEdit ? '' : 'none';
+        // Editable regardless of how old the cycle is — see period-model.js's
+        // EDIT_WINDOW_DAYS comment for why that guardrail was removed.
+        editBtn.style.display = cycle.id ? '' : 'none';
     }
 
     document.getElementById('detail-cycle-title').textContent = `Cycle length: ${formatCycleTitle(cycle)}`;
