@@ -213,11 +213,17 @@ const DataStore = (() => {
   // cycle, and so a real edit isn't mistaken for a brand-new row.
   //
   // Per id, the merge rule is: whichever side (cloud or local) actually
-  // changed since the last-synced baseline wins. This is what lets a manual
-  // sheet edit — including one that shrinks periodDayCount, adds a new row
-  // for a previously-missed period, or removes a bad row entirely — stick,
-  // while still letting an in-app edit/addition made since the last sync
-  // (e.g. logging today's period) survive until it's pushed up.
+  // diverged from the last-synced baseline wins — including a side's own
+  // *absence*. If the sheet still holds exactly what we last wrote for an
+  // id, local is authoritative even if local no longer has that id at all
+  // (e.g. PeriodModel.normalize() absorbed it into a neighboring cycle as
+  // part of an in-app edit) — that absence must NOT be treated as "nothing
+  // changed, resurrect it from the cloud." Conversely if the sheet did
+  // change (including going away — a deleted row), the sheet wins. This is
+  // what lets a manual sheet edit (shrinking periodDayCount, adding a row
+  // for a previously-missed period, deleting a bad row) stick, an in-app
+  // edit/deletion/merge stick, and an in-app addition not yet synced
+  // survive — all without any of them clobbering each other.
   async function syncReconcile() {
     const cloudPeriods = await loadData();
     if (cloudPeriods === null) {
@@ -244,31 +250,32 @@ const DataStore = (() => {
       const local = localById.get(id);
       const baseline = lastSynced[id];
 
-      if (cloud && baseline && !sameRow(cloud, baseline)) {
-        // Sheet was edited since the last sync (including a smaller count) — sheet wins.
-        merged.push(cloud);
-      } else if (!cloud && baseline && sameRow(local, baseline)) {
-        // Row existed at last sync, is now gone from the sheet, and local
-        // hasn't diverged from that same baseline — the user deleted it.
-        continue;
-      } else if (cloud && !baseline && !local) {
+      if (baseline) {
+        // !sameRow(cloud, baseline) is also true when cloud is undefined —
+        // i.e. "changed" covers both an edit and a deletion.
+        if (sameRow(cloud, baseline)) {
+          // Sheet is exactly what we last synced — local is authoritative,
+          // including its absence (a local deletion/merge-away).
+          if (local) merged.push(local);
+        } else if (cloud) {
+          // Sheet genuinely changed — sheet wins, regardless of local.
+          merged.push(cloud);
+        }
+        // else: cloud is gone — deleted from the sheet — drop it either way.
+      } else if (cloud && local) {
+        // No baseline recorded for this id yet (e.g. the very first sync
+        // since this reconciliation logic shipped) but cloud and local
+        // disagree — assume the sheet holds a real edit that predates any
+        // baseline ever being taken, and prefer it.
+        merged.push(sameRow(cloud, local) ? local : cloud);
+      } else if (cloud) {
         // Brand-new row typed directly into the sheet (no id column, no
-        // local match by startDate either) — adopt it.
-        merged.push(cloud);
-      } else if (cloud && local && !baseline && !sameRow(cloud, local)) {
-        // No baseline recorded for this id yet — e.g. this is the very first
-        // sync since this reconciliation logic shipped, or localStorage's
-        // snapshot was cleared — but cloud and local disagree. Assume the
-        // sheet holds a real edit that predates any baseline ever being
-        // taken, and prefer it, rather than defaulting to local and
-        // silently discarding an edit the user already made.
+        // local match by startDate either), or a fresh device adopting real
+        // cloud history for the first time — adopt it.
         merged.push(cloud);
       } else if (local) {
-        // Local changed since the last sync (in-app edit/addition not yet
-        // synced), or nothing changed on either side — keep local as-is.
+        // Brand-new local addition not yet synced (e.g. logged in-app).
         merged.push(local);
-      } else if (cloud) {
-        merged.push(cloud);
       }
     }
 
